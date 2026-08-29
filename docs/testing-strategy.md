@@ -51,14 +51,15 @@ Keep command construction observable without running a commit. Test:
 
 Test state transitions directly:
 
-- Focus wraps with Tab and Shift+Tab.
+- Focus wraps with arrow keys, Tab, and Shift+Tab.
+- Ctrl+Enter submits through normal validation outside the type picker.
 - Space changes only focused boolean controls.
 - Type picker opens and closes correctly.
 - Filtering selects a standard type or custom query.
 - Submit validation focuses the first invalid field.
 - Cancel produces `AppAction::Cancel`.
 
-Use `ratatui::backend::TestBackend` for narrow render smoke tests: normal terminal, small terminal, form mode, and picker mode. Assert that rendering does not panic; do not snapshot the entire screen.
+Use `ratatui::backend::TestBackend` for narrow render smoke tests: normal terminal, compact terminal with vertical scroll, too-small terminal, form mode, and picker mode. Assert that rendering does not panic; do not snapshot the entire screen.
 
 ## Git integration test
 
