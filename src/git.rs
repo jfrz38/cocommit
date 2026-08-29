@@ -1,13 +1,14 @@
 //! Git command execution and preflight checks.
 
-use std::process::Command;
+use std::{path::Path, process::Command};
 
 use anyhow::{Context, Result, bail};
 
 /// Verifies that Git is available, the current directory is a work tree, and
 /// the index contains staged changes.
-pub fn preflight() -> Result<()> {
+pub fn preflight(working_directory: &Path) -> Result<()> {
     let output = Command::new("git")
+        .current_dir(working_directory)
         .args(["rev-parse", "--is-inside-work-tree"])
         .output()
         .context("failed to run git rev-parse; ensure Git is installed and on PATH")?;
@@ -17,6 +18,7 @@ pub fn preflight() -> Result<()> {
     }
 
     let status = Command::new("git")
+        .current_dir(working_directory)
         .args(["diff", "--cached", "--quiet"])
         .status()
         .context("failed to run git diff; ensure Git is installed and on PATH")?;
@@ -29,8 +31,9 @@ pub fn preflight() -> Result<()> {
 }
 
 /// Runs `git commit` with the supplied message and optional explicit signing.
-pub fn commit(message: &str, sign: bool) -> Result<()> {
+pub fn commit(working_directory: &Path, message: &str, sign: bool) -> Result<()> {
     let status = Command::new("git")
+        .current_dir(working_directory)
         .args(commit_arguments(message, sign))
         .status()
         .context("failed to run git commit; ensure Git is installed and on PATH")?;

@@ -17,6 +17,7 @@ Makefile
   workflows/
     ci.yml
 src/
+  lib.rs
   main.rs
   app.rs
   commit.rs
@@ -29,7 +30,7 @@ tests/
   git_integration.rs
 ```
 
-`lib.rs` is intentionally omitted initially. Unit tests can live beside binary modules. The integration test is separate because it executes a real temporary Git repository.
+`lib.rs` exposes the production modules to the binary and black-box integration tests. Unit tests can live beside their modules. The integration test is separate because it executes a real temporary Git repository.
 
 ## Development tooling
 
