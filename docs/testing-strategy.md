@@ -76,12 +76,15 @@ No signing or hook behavior is tested automatically because those depend on host
 
 ## Quality commands
 
-Every implementation phase should keep these passing:
+Every implementation phase should keep `make check` passing. It is the canonical local quality command and runs formatting, linting, tests, and a build with the lockfile enforced. Its component commands are:
 
 ```bash
-cargo fmt --check
-cargo clippy --all-targets -- -D warnings
-cargo test
+cargo fmt --all -- --check
+cargo clippy --locked --all-targets --all-features -- -D warnings
+cargo test --locked --all-targets --all-features
+cargo build --locked --all-targets --all-features
 ```
+
+GitHub Actions runs `make check` on Ubuntu for pull requests to `develop` and `main`, every Monday at 06:00 UTC, and on manual dispatch. Windows and macOS run `cargo check --workspace --all-targets --all-features --locked` for pull requests to `main`, scheduled runs, and manual dispatch; this preserves portability coverage without depending on GNU Make.
 
 Before release, run manual smoke tests on a real repository for cancel, valid unsigned commit, explicit signing, Git hook rejection, no staged changes, non-repository invocation, small terminal, and pasted text.

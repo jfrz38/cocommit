@@ -1,0 +1,17 @@
+[package]
+name = "cocommit"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94.1"
+
+[dependencies]
+anyhow = "1"
+crossterm = "0.29"
+dirs = "6"
+ratatui = "0.30"
+serde = { version = "1", features = ["derive"] }
+toml = "1"
+tui-input = "0.15"
+
+[dev-dependencies]
+tempfile = "3"
