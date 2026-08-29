@@ -89,3 +89,17 @@ cargo build --locked --all-targets --all-features
 GitHub Actions runs `make check` on Ubuntu for pull requests to `develop` and `main`, every Monday at 06:00 UTC, and on manual dispatch. Windows and macOS run `cargo check --workspace --all-targets --all-features --locked` for pull requests to `main`, scheduled runs, and manual dispatch; this preserves portability coverage without depending on GNU Make.
 
 Before release, run manual smoke tests on a real repository for cancel, valid unsigned commit, explicit signing, Git hook rejection, no staged changes, non-repository invocation, small terminal, and pasted text.
+
+## Release workflow rehearsal
+
+The release workflow must be tested from GitHub Actions before its first use. A manual dispatch runs the validation job only and must not create a tag or GitHub Release. Review its log for the checked-out SHA, clean worktree check, `make release-check-clean`, and resolved version.
+
+For the automatic path, record evidence for these states in a private test repository or a non-release test version:
+
+- No tag and no release creates both from the pushed `main` commit.
+- Re-running the same workflow leaves the existing immutable tag and release unchanged.
+- A later `main` merge with the same package version is a no-op.
+- A tag without a release is completed without moving the tag.
+- A tag outside `main` history and a release without a tag fail without modifying either resource.
+
+The manual publish workflow must be observed to validate the latest release before its OIDC publication job starts. It must never be dispatched for the first `0.1.0` publication, which uses the documented temporary-token procedure.

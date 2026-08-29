@@ -70,12 +70,12 @@ Every iteration must follow these rules:
 
 ### Iteration 10: Release control
 
-The current release workflow reacts to pushes to `main`. This must be changed before normal development can safely reach `main`, because the first release must only happen after the complete release gate has passed.
+The current release workflow reacts to pushes to `main`. This remains the approved trigger: a reviewed version bump merged to `main` is the explicit request for a GitHub Release. The workflow must still be safe to rehearse and must not let later merges rewrite an existing release.
 
 Work:
 
-- Replace release-on-every-push behavior with an explicit release event or approved manual dispatch.
-- Require the operator to select the exact commit or tag being released.
+- Keep automatic GitHub Release creation for a new package version merged to `main` and make later merges with that version no-ops.
+- Add a manual, non-publishing rehearsal for the exact commit selected by the dispatch ref.
 - Separate unprivileged validation from tag creation and package publication.
 - Grant `contents: write` only to the job that creates the final tag and GitHub Release.
 - Grant `id-token: write` only to the job that authenticates with crates.io.
@@ -86,7 +86,7 @@ Work:
 
 Completion criteria:
 
-- A push or merge to `main` cannot create a release by itself.
+- A push or merge to `main` creates a release only when its package version has no immutable tag and GitHub Release.
 - The complete validation path can run in the private repository without publishing anything.
 - Privileged jobs do not compile or execute unnecessary project or dependency code.
 - Duplicate and conflicting release attempts have automated tests or documented rehearsal evidence.

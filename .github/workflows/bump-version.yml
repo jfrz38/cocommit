@@ -41,7 +41,7 @@ jobs:
         uses: dtolnay/rust-toolchain@1.94.1
 
       - name: Bump version
-        uses: jfrz38/auto-version-bump-action@v0.3.0
+        uses: jfrz38/auto-version-bump-action@72e195a978a7b6b433b39bfef52d335b6fe609b6 # v0.3.0
         with:
           bump: ${{ inputs.bump }}
           strategy: regex
@@ -53,4 +53,4 @@ jobs:
           commit-message: 'chore: bump version to {new-version}'
           pr-title: 'chore: bump version to {new-version}'
           pr-body: 'Bumps cocommit from {current-version} to {next-version} using a {bump} release bump.'
-          pre-commit-commands: cargo check
+          pre-commit-commands: cargo generate-lockfile
