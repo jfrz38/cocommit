@@ -77,6 +77,18 @@ Completion criteria:
 - `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and `cargo test` pass.
 - Manual checks cover the cases in the testing strategy.
 
+## Phase 9: Release pipeline
+
+Automate GitHub Release creation from `main`, while keeping crates.io publication as an explicit manual workflow. Add a version-bump workflow that opens a reviewable pull request against the selected release branch.
+
+Completion criteria:
+
+- A manual version bump updates `Cargo.toml` and `Cargo.lock` in a draft pull request.
+- A push to `main` validates the package and creates exactly one `v<version>` GitHub Release for a new stable package version.
+- A manual publish checks out the latest release tag, validates its ancestry and version, then publishes that exact package to crates.io through Trusted Publishing.
+- No long-lived crates.io token is stored in repository configuration.
+- `make release-check` runs all quality checks and validates the Cargo package without publishing it.
+
 ## Dependency selection
 
 | Crate | Purpose |

@@ -140,6 +140,12 @@ Run the complete local quality suite with:
 make check
 ```
 
+Validate the package that will be published without uploading it:
+
+```bash
+make release-check
+```
+
 ## License
 
 [MIT](LICENSE)
