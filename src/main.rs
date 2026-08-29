@@ -2,7 +2,7 @@ mod app;
 pub mod commit;
 pub mod config;
 mod event;
-mod git;
+pub mod git;
 mod terminal;
 mod ui;
 
