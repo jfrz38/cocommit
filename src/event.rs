@@ -20,11 +20,15 @@ fn map_key(key: KeyEvent) -> Option<AppEvent> {
             Some(AppEvent::Cancel)
         }
         (KeyCode::Esc, _) => Some(AppEvent::Escape),
+        (KeyCode::F(1), _) => Some(AppEvent::Help),
         (KeyCode::Tab, modifiers) if modifiers.contains(KeyModifiers::SHIFT) => {
             Some(AppEvent::BackTab)
         }
         (KeyCode::BackTab, _) => Some(AppEvent::BackTab),
         (KeyCode::Tab, _) => Some(AppEvent::Tab),
+        (KeyCode::Enter, modifiers) if modifiers.contains(KeyModifiers::CONTROL) => {
+            Some(AppEvent::Submit)
+        }
         (KeyCode::Enter, _) => Some(AppEvent::Enter),
         (KeyCode::Char(' '), _) => Some(AppEvent::Space),
         (KeyCode::Up, _) => Some(AppEvent::Up),

@@ -206,3 +206,64 @@ fn valid_submission_preserves_signing_choice_and_clears_errors_on_edit() {
     assert_eq!(app.handle(AppEvent::Enter), AppAction::Submit);
     assert!(app.sign);
 }
+
+#[test]
+fn arrow_keys_cycle_through_form_focus_targets() {
+    let mut app = App::new(false);
+    assert_eq!(app.handle(AppEvent::Down), AppAction::Continue);
+    assert_eq!(app.focus, Focus::Scope);
+    assert_eq!(app.handle(AppEvent::Up), AppAction::Continue);
+    assert_eq!(app.focus, Focus::CommitType);
+    assert_eq!(app.handle(AppEvent::Up), AppAction::Continue);
+    assert_eq!(app.focus, Focus::Submit);
+}
+
+#[test]
+fn help_toggles_without_losing_the_previous_mode() {
+    let mut app = App::new(false);
+    app.focus = Focus::Message;
+    app.handle(AppEvent::Help);
+    assert!(matches!(app.mode, Mode::Help(_)));
+    app.handle(AppEvent::Escape);
+    assert!(matches!(app.mode, Mode::Form));
+    assert_eq!(app.focus, Focus::Message);
+
+    app.focus = Focus::CommitType;
+    app.handle(AppEvent::Enter);
+    app.handle(AppEvent::Help);
+    app.handle(AppEvent::Help);
+    assert!(matches!(app.mode, Mode::TypePicker(_)));
+}
+
+#[test]
+fn submit_event_submits_from_any_form_field_but_not_the_picker() {
+    let mut app = App::new(true);
+    app.form.message = Input::new("add endpoint".to_owned());
+    assert_eq!(app.handle(AppEvent::Submit), AppAction::Submit);
+
+    app.handle(AppEvent::Enter);
+    assert!(matches!(app.mode, Mode::TypePicker(_)));
+    assert_eq!(app.handle(AppEvent::Submit), AppAction::Continue);
+    assert!(matches!(app.mode, Mode::TypePicker(_)));
+}
+
+#[test]
+fn preview_uses_the_canonical_formatter_for_incomplete_forms() {
+    let mut app = App::new(false);
+    assert_eq!(app.preview(), "feat: ");
+
+    app.form.scope = Input::new("api".to_owned());
+    app.form.breaking = true;
+    app.form.message = Input::new("add endpoint".to_owned());
+    app.form.issue = Input::new("42".to_owned());
+    assert_eq!(app.preview(), "feat(api)!: add endpoint (#42)");
+}
+
+#[test]
+fn preview_omits_an_invalid_issue_until_submission() {
+    let mut app = App::new(false);
+    app.form.message = Input::new("add endpoint".to_owned());
+    app.form.issue = Input::new("not-a-number".to_owned());
+
+    assert_eq!(app.preview(), "feat: add endpoint");
+}
