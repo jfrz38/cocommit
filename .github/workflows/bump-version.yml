@@ -1,0 +1,56 @@
+name: Bump Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version component to bump
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      base_branch:
+        description: Branch to bump and target with the pull request
+        required: true
+        default: develop
+        type: choice
+        options:
+          - develop
+          - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base_branch }}
+          fetch-depth: 0
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.94.1
+
+      - name: Bump version
+        uses: jfrz38/auto-version-bump-action@v0.3.0
+        with:
+          bump: ${{ inputs.bump }}
+          strategy: regex
+          version-file: Cargo.toml
+          version-pattern: '^version\s*=\s*"(\d+\.\d+\.\d+)"'
+          version-replacement: 'version = "{version}"'
+          base-branch: ${{ inputs.base_branch }}
+          github-token: ${{ github.token }}
+          commit-message: 'chore: bump version to {new-version}'
+          pr-title: 'chore: bump version to {new-version}'
+          pr-body: 'Bumps cocommit from {current-version} to {next-version} using a {bump} release bump.'
+          pre-commit-commands: cargo check
