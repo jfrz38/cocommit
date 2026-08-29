@@ -1,1 +1,348 @@
 //! Application state and state transitions.
+
+use tui_input::{Input, InputRequest};
+
+use crate::commit::{CommitDraft, DraftField, ValidationError};
+
+pub const STANDARD_TYPES: [&str; 11] = [
+    "feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert",
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Focus {
+    CommitType,
+    Scope,
+    Breaking,
+    Message,
+    Issue,
+    Sign,
+    Submit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Edit {
+    Insert(char),
+    Backspace,
+    Delete,
+    Home,
+    End,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AppEvent {
+    Tab,
+    BackTab,
+    Enter,
+    Space,
+    Escape,
+    Cancel,
+    Up,
+    Down,
+    Edit(Edit),
+    Paste(String),
+    Resize(u16, u16),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AppAction {
+    Continue,
+    Cancel,
+    Submit,
+}
+
+#[derive(Debug, Clone)]
+pub struct FormState {
+    pub commit_type: Input,
+    pub scope: Input,
+    pub breaking: bool,
+    pub message: Input,
+    pub issue: Input,
+}
+
+impl FormState {
+    fn draft(&self) -> Result<CommitDraft, Vec<ValidationError>> {
+        CommitDraft::from_raw(
+            self.commit_type.to_string(),
+            Some(self.scope.to_string()),
+            self.breaking,
+            self.message.to_string(),
+            Some(self.issue.to_string()),
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TypePickerState {
+    pub query: Input,
+    pub highlighted: usize,
+}
+
+impl TypePickerState {
+    pub fn choices(&self) -> Vec<TypeChoice> {
+        let query = self.query.to_string();
+        let query_lower = query.to_lowercase();
+        let mut choices = STANDARD_TYPES
+            .iter()
+            .filter(|commit_type| commit_type.contains(&query_lower))
+            .map(|commit_type| TypeChoice::Standard((*commit_type).to_owned()))
+            .collect::<Vec<_>>();
+
+        if query.is_empty() {
+            choices.push(TypeChoice::Custom);
+        } else if !STANDARD_TYPES.contains(&query.as_str()) {
+            choices.push(TypeChoice::CustomQuery(query));
+        }
+
+        choices
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypeChoice {
+    Standard(String),
+    Custom,
+    CustomQuery(String),
+}
+
+#[derive(Debug, Clone)]
+pub enum Mode {
+    Form,
+    TypePicker(TypePickerState),
+}
+
+#[derive(Debug, Clone)]
+pub struct App {
+    pub form: FormState,
+    pub focus: Focus,
+    pub mode: Mode,
+    pub sign: bool,
+    pub validation_error: Option<ValidationError>,
+}
+
+impl App {
+    pub fn new(sign: bool) -> Self {
+        Self {
+            form: FormState {
+                commit_type: Input::new("feat".to_owned()),
+                scope: Input::default(),
+                breaking: false,
+                message: Input::default(),
+                issue: Input::default(),
+            },
+            focus: Focus::CommitType,
+            mode: Mode::Form,
+            sign,
+            validation_error: None,
+        }
+    }
+
+    pub fn draft(&self) -> Result<CommitDraft, Vec<ValidationError>> {
+        self.form.draft()
+    }
+
+    pub fn handle(&mut self, event: AppEvent) -> AppAction {
+        match &mut self.mode {
+            Mode::Form => self.handle_form(event),
+            Mode::TypePicker(_) => self.handle_picker(event),
+        }
+    }
+
+    fn handle_form(&mut self, event: AppEvent) -> AppAction {
+        match event {
+            AppEvent::Tab => self.focus = self.focus.next(),
+            AppEvent::BackTab => self.focus = self.focus.previous(),
+            AppEvent::Enter => match self.focus {
+                Focus::CommitType => self.open_picker(),
+                Focus::Scope => self.focus = Focus::Breaking,
+                Focus::Message => self.focus = Focus::Issue,
+                Focus::Issue => self.focus = Focus::Sign,
+                Focus::Submit => return self.submit(),
+                Focus::Breaking | Focus::Sign => {}
+            },
+            AppEvent::Space => match self.focus {
+                Focus::Breaking => {
+                    self.form.breaking = !self.form.breaking;
+                    self.clear_validation_error();
+                }
+                Focus::Sign => {
+                    self.sign = !self.sign;
+                    self.clear_validation_error();
+                }
+                Focus::Scope | Focus::Message | Focus::Issue => self.edit_form(Edit::Insert(' ')),
+                _ => {}
+            },
+            AppEvent::Escape | AppEvent::Cancel => return AppAction::Cancel,
+            AppEvent::Edit(edit) => self.edit_form(edit),
+            AppEvent::Paste(value) => self.paste_form(&value),
+            AppEvent::Up | AppEvent::Down | AppEvent::Resize(_, _) => {}
+        }
+        AppAction::Continue
+    }
+
+    fn handle_picker(&mut self, event: AppEvent) -> AppAction {
+        match event {
+            AppEvent::Escape => self.mode = Mode::Form,
+            AppEvent::Cancel => return AppAction::Cancel,
+            AppEvent::Enter => self.select_picker_choice(),
+            AppEvent::Up => self.move_highlight(-1),
+            AppEvent::Down => self.move_highlight(1),
+            AppEvent::Edit(edit) => self.edit_picker(edit),
+            AppEvent::Paste(value) => self.paste_picker(&value),
+            AppEvent::Space => self.edit_picker(Edit::Insert(' ')),
+            AppEvent::Tab | AppEvent::BackTab | AppEvent::Resize(_, _) => {}
+        }
+        AppAction::Continue
+    }
+
+    fn open_picker(&mut self) {
+        self.mode = Mode::TypePicker(TypePickerState {
+            query: Input::default(),
+            highlighted: 0,
+        });
+    }
+
+    fn select_picker_choice(&mut self) {
+        let Mode::TypePicker(picker) = &self.mode else {
+            return;
+        };
+        let choice = picker.choices().get(picker.highlighted).cloned();
+        match choice {
+            Some(TypeChoice::Standard(value)) | Some(TypeChoice::CustomQuery(value)) => {
+                self.form.commit_type = Input::new(value);
+            }
+            Some(TypeChoice::Custom) | None => {}
+        }
+        self.mode = Mode::Form;
+        self.focus = Focus::Scope;
+        self.clear_validation_error();
+    }
+
+    fn move_highlight(&mut self, direction: isize) {
+        let Mode::TypePicker(picker) = &mut self.mode else {
+            return;
+        };
+        let len = picker.choices().len();
+        if len == 0 {
+            return;
+        }
+        picker.highlighted =
+            (picker.highlighted as isize + direction).rem_euclid(len as isize) as usize;
+    }
+
+    fn edit_form(&mut self, edit: Edit) {
+        let input = match self.focus {
+            Focus::Scope => Some(&mut self.form.scope),
+            Focus::Message => Some(&mut self.form.message),
+            Focus::Issue => Some(&mut self.form.issue),
+            _ => None,
+        };
+        if let Some(input) = input {
+            input.handle(edit.request());
+            self.clear_validation_error();
+        }
+    }
+
+    fn paste_form(&mut self, value: &str) {
+        for character in sanitize_paste(value).chars() {
+            self.edit_form(Edit::Insert(character));
+        }
+    }
+
+    fn edit_picker(&mut self, edit: Edit) {
+        let Mode::TypePicker(picker) = &mut self.mode else {
+            return;
+        };
+        picker.query.handle(edit.request());
+        picker.highlighted = 0;
+        self.clear_validation_error();
+    }
+
+    fn paste_picker(&mut self, value: &str) {
+        for character in sanitize_paste(value).chars() {
+            self.edit_picker(Edit::Insert(character));
+        }
+    }
+
+    fn submit(&mut self) -> AppAction {
+        match self.draft() {
+            Ok(_) => AppAction::Submit,
+            Err(errors) => {
+                let error = errors[0];
+                self.focus = focus_for(error.field);
+                self.validation_error = Some(error);
+                AppAction::Continue
+            }
+        }
+    }
+
+    fn clear_validation_error(&mut self) {
+        self.validation_error = None;
+    }
+}
+
+impl Focus {
+    fn next(self) -> Self {
+        match self {
+            Self::CommitType => Self::Scope,
+            Self::Scope => Self::Breaking,
+            Self::Breaking => Self::Message,
+            Self::Message => Self::Issue,
+            Self::Issue => Self::Sign,
+            Self::Sign => Self::Submit,
+            Self::Submit => Self::CommitType,
+        }
+    }
+
+    fn previous(self) -> Self {
+        match self {
+            Self::CommitType => Self::Submit,
+            Self::Scope => Self::CommitType,
+            Self::Breaking => Self::Scope,
+            Self::Message => Self::Breaking,
+            Self::Issue => Self::Message,
+            Self::Sign => Self::Issue,
+            Self::Submit => Self::Sign,
+        }
+    }
+}
+
+impl Edit {
+    fn request(self) -> InputRequest {
+        match self {
+            Self::Insert(character) => InputRequest::InsertChar(character),
+            Self::Backspace => InputRequest::DeletePrevChar,
+            Self::Delete => InputRequest::DeleteNextChar,
+            Self::Home => InputRequest::GoToStart,
+            Self::End => InputRequest::GoToEnd,
+        }
+    }
+}
+
+fn focus_for(field: DraftField) -> Focus {
+    match field {
+        DraftField::CommitType => Focus::CommitType,
+        DraftField::Scope => Focus::Scope,
+        DraftField::Message => Focus::Message,
+        DraftField::Issue => Focus::Issue,
+    }
+}
+
+fn sanitize_paste(value: &str) -> String {
+    let mut sanitized = String::new();
+    let mut previous_was_line_break = false;
+    for character in value.chars() {
+        if matches!(character, '\r' | '\n') {
+            if !previous_was_line_break {
+                sanitized.push(' ');
+            }
+            previous_was_line_break = true;
+        } else {
+            sanitized.push(character);
+            previous_was_line_break = false;
+        }
+    }
+    sanitized
+}
+
+#[cfg(test)]
+mod tests;
