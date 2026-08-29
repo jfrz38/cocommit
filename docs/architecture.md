@@ -11,6 +11,11 @@ The Conventional Commit model is pure Rust and independent of Ratatui. UI code o
 ```text
 Cargo.toml
 Cargo.lock
+rust-toolchain.toml
+Makefile
+.github/
+  workflows/
+    ci.yml
 src/
   main.rs
   app.rs
@@ -25,6 +30,12 @@ tests/
 ```
 
 `lib.rs` is intentionally omitted initially. Unit tests can live beside binary modules. The integration test is separate because it executes a real temporary Git repository.
+
+## Development tooling
+
+`rust-toolchain.toml` fixes development and CI to Rust 1.94.1 with the `clippy` and `rustfmt` components. `Makefile` is the local quality interface: `make check` runs formatting, linting, tests, and a build against `Cargo.lock`.
+
+`.github/workflows/ci.yml` runs that quality suite on Ubuntu. It also checks compilation on Windows and macOS for pull requests to `main`, scheduled runs, and manual dispatches, without requiring GNU Make on those runners.
 
 ## Module responsibilities
 
