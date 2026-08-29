@@ -16,14 +16,14 @@ The interface remains compact and needs no mouse support.
 │               [ Commit ]                  │
 ├─ Preview ─────────────────────────────────┤
 │ feat                                       │
-├─ Status ──────────────────────────────────┤
+├─ Error ───────────────────────────────────┤
 │ Message is required                       │
 ├───────────────────────────────────────────┤
 │ Up/Down Navigate  Ctrl+Enter Commit  Esc  │
 └────────────────────────────────────────────┘
 ```
 
-The focused row must have a visually distinct border, label, or background. The preview is rebuilt from the current draft after every edit. Status is empty until a validation or configuration warning needs to be shown.
+The focused row must have a visually distinct border, label, or background. The preview is rebuilt from the current draft after every edit. The Error block is hidden until a validation or configuration warning needs to be shown, and uses red only when visible.
 
 The full bordered layout is used when space allows. Smaller terminals use compact one-line rows with automatic vertical scrolling that keeps the focused field visible. For terminals too small to safely draw even the compact layout, render only a clear resize instruction. Do not construct invalid Ratatui layout areas.
 
@@ -35,7 +35,7 @@ Focus advances in this order:
 Type -> Scope -> Breaking -> Message -> Issue -> Sign -> Submit
 ```
 
-`Up` and `Down` move backward and forward through fields, respectively, and wrap. `Tab` and `Shift+Tab` provide the same forward and reverse navigation. Text input is active only for Type's popup search, Scope, Message, and Issue.
+`Up` and `Down` move backward and forward through fields, respectively, and wrap. `Tab` and `Shift+Tab` provide the same forward and reverse navigation. Typing or pasting while Type is focused opens its popup search. Text input is otherwise active for Scope, Message, and Issue.
 
 ## Keyboard behavior
 
@@ -50,20 +50,19 @@ Type -> Scope -> Breaking -> Message -> Issue -> Sign -> Submit
 | `Space` | Toggle Breaking or Sign when focused | Insert a search space |
 | `Esc` | Cancel application | Close picker and keep existing type |
 | `Ctrl+C` | Cancel application | Cancel application |
-| Printable text | Edit focused text field | Filter choices |
+| Printable text | Open Type picker with the character when Type is focused; otherwise edit focused text field | Filter choices |
 | Backspace/Delete/Home/End | Edit focused text field | Edit search query |
-| Paste | Insert sanitized one-line text | Insert sanitized search query |
+| Paste | Open Type picker with sanitized text when Type is focused; otherwise insert sanitized one-line text | Insert sanitized search query |
 
 Vim `j` and `k` are intentionally not navigation shortcuts because they must remain searchable type characters.
 
 ## Type picker
 
-Pressing `Enter` on Type opens a popup containing the standard types. The popup uses a case-insensitive substring match over its small list; fuzzy-search dependencies are not justified.
+Pressing `Enter` on Type opens a popup containing the standard types. Typing or pasting while Type is focused opens the same popup with that value as its query. The popup uses a case-insensitive prefix match over its small list; fuzzy-search dependencies are not justified.
 
 - Arrow keys change selection.
 - A query filters the list.
 - `Enter` selects the highlighted standard type.
-- With an empty query, a `custom...` row is available.
 - With a non-empty query not exactly equal to a standard type, show `Use "<query>"` as the custom row.
 - Selecting a custom row writes the query into Type.
 - `Esc` closes the popup without changing Type.
@@ -82,7 +81,7 @@ Commit is an explicit focusable action. There is no confirmation modal: navigati
 On validation failure:
 
 1. Keep the UI open.
-2. Display a concise field-specific error in Status.
+2. Display a concise field-specific error in Error.
 3. Move focus to the first invalid field.
 
 On cancel, restore the terminal and return success without invoking Git. On valid submission, the UI returns the draft and signing choice to `main`; Git runs only after the terminal is restored.

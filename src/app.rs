@@ -85,13 +85,11 @@ impl TypePickerState {
         let query_lower = query.to_lowercase();
         let mut choices = STANDARD_TYPES
             .iter()
-            .filter(|commit_type| commit_type.contains(&query_lower))
+            .filter(|commit_type| commit_type.starts_with(&query_lower))
             .map(|commit_type| TypeChoice::Standard((*commit_type).to_owned()))
             .collect::<Vec<_>>();
 
-        if query.is_empty() {
-            choices.push(TypeChoice::Custom);
-        } else if !STANDARD_TYPES.contains(&query.as_str()) {
+        if !query.is_empty() && !STANDARD_TYPES.contains(&query.as_str()) {
             choices.push(TypeChoice::CustomQuery(query));
         }
 
@@ -102,7 +100,6 @@ impl TypePickerState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeChoice {
     Standard(String),
-    Custom,
     CustomQuery(String),
 }
 
@@ -248,6 +245,14 @@ impl App {
                 _ => {}
             },
             AppEvent::Escape | AppEvent::Cancel => return AppAction::Cancel,
+            AppEvent::Edit(edit) if self.focus == Focus::CommitType => {
+                self.open_picker();
+                self.edit_picker(edit);
+            }
+            AppEvent::Paste(value) if self.focus == Focus::CommitType => {
+                self.open_picker();
+                self.paste_picker(&value);
+            }
             AppEvent::Edit(edit) => self.edit_form(edit),
             AppEvent::Paste(value) => self.paste_form(&value),
             AppEvent::Resize(_, _) | AppEvent::Help => {}
@@ -290,7 +295,7 @@ impl App {
             Some(TypeChoice::Standard(value)) | Some(TypeChoice::CustomQuery(value)) => {
                 self.form.commit_type = Input::new(value);
             }
-            Some(TypeChoice::Custom) | None => {}
+            None => {}
         }
         self.mode = Mode::Form;
         self.focus = Focus::Scope;
@@ -334,7 +339,6 @@ impl App {
         };
         picker.query.handle(edit.request());
         picker.highlighted = 0;
-        self.clear_validation_error();
     }
 
     fn paste_picker(&mut self, value: &str) {
