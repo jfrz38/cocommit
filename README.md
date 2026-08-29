@@ -1,4 +1,12 @@
-# cocommit
+# 🥥 cocommit
+
+**Craft Conventional Commits without leaving your terminal.**
+
+[![CI](https://github.com/jfrz38/cocommit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jfrz38/cocommit/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/cocommit?logo=rust)](https://crates.io/crates/cocommit)
+[![Downloads](https://img.shields.io/crates/d/cocommit)](https://crates.io/crates/cocommit)
+[![License](https://img.shields.io/github/license/jfrz38/cocommit)](LICENSE)
+[![MSRV](https://img.shields.io/badge/rustc-1.94.1%2B-blue)](https://www.rust-lang.org)
 
 `cocommit` is a small keyboard-driven terminal UI for creating Conventional Commit headers from already staged changes. It previews the message as you edit it, then delegates the commit to your installed Git CLI.
 
@@ -6,26 +14,30 @@
 feat(api)!: add authentication (#123)
 ```
 
+## Why cocommit?
+
+- Build valid Conventional Commit headers interactively.
+- Preview the final message before committing.
+- Preserve Git hooks, signing, credentials, and native output.
+- Run from anywhere inside your Git working tree.
+- Stay entirely in the terminal.
+
+## Install
+
+Install `cocommit` from crates.io:
+
+```bash
+cargo install cocommit --locked
+```
+
+The installed `cocommit` executable must be on your `PATH`.
+
 ## Requirements
 
 - Git must be installed and available on `PATH`.
 - Run the application from a non-bare Git working tree that has staged changes.
 - A terminal that supports interactive input is required.
 - Rust 1.94.1 is required when installing from source. The repository pins this version with `rust-toolchain.toml`.
-
-## Install
-
-Install from a local checkout:
-
-```bash
-cargo install --path . --locked
-```
-
-The installed `cocommit` executable must be on your `PATH`. To run directly from a checkout instead, use:
-
-```bash
-cargo run --locked
-```
 
 ## Usage
 
@@ -50,6 +62,12 @@ The type picker also accepts custom types. Scope, breaking marker, issue number,
 
 Optional parts are omitted when unset. The message is required, and all text fields are one line. The preview updates after every edit.
 
+## Validation
+
+All text fields are trimmed before validation and rendering. The type is required and cannot contain whitespace, `(`, `)`, `!`, or `:`. Scope cannot contain parentheses, and a non-empty issue must be a decimal integer. The message must be present and one line, but cocommit does not impose arbitrary length, capitalization, punctuation, or tense rules.
+
+Invalid submission keeps the form open, displays a field-specific error, and focuses the first invalid field. Pasted line breaks are converted to spaces.
+
 ## Keyboard Controls
 
 | Key | Behavior |
@@ -63,6 +81,8 @@ Optional parts are omitted when unset. The message is required, and all text fie
 | Esc | Close the type picker or help; cancel from the form. |
 | Ctrl+C | Cancel without invoking Git. |
 | Backspace / Delete / Home / End | Edit a text field or type-picker query. |
+
+The type picker filters standard types with a case-insensitive substring search. A nonstandard query can be selected as a custom type. cocommit is keyboard-driven and does not support mouse input.
 
 The layout switches to a compact, vertically scrolling view in smaller terminals. Below `30x8`, it displays a resize instruction instead of the form.
 
@@ -82,30 +102,41 @@ It is read from `<config-dir>/cocommit/config.toml`:
 | macOS | `~/Library/Application Support/cocommit/config.toml` |
 | Windows | `%APPDATA%\cocommit\config.toml` |
 
-Missing configuration uses `sign = true`. Set `sign = false` to omit the explicit `-S` flag. This does not force an unsigned commit: Git's own `commit.gpgSign` setting can still apply. Unknown keys and invalid TOML are reported as errors; cocommit never creates configuration files or directories.
+Missing configuration, or an unavailable platform configuration directory, uses `sign = true`. Set `sign = false` to omit the explicit `-S` flag. This does not force an unsigned commit: Git's own `commit.gpgSign` setting can still apply. Unknown keys, invalid TOML, and unreadable existing files are reported as errors before the interface opens. cocommit never creates configuration files or directories.
 
 ## Git Behavior
 
-Before opening the form, cocommit verifies that Git is available, the current directory is inside a usable working tree, and staged changes exist. Git remains authoritative after that check, so a changed index can still cause the final commit to fail.
+Before opening the form, cocommit verifies that Git is available, the current directory is inside a usable working tree, and staged changes exist. This works from subdirectories and linked worktrees. Git remains authoritative after that check, so a changed index can still cause the final commit to fail.
 
-After a valid submission, cocommit restores the terminal and runs `git commit` with inherited standard streams. This preserves normal Git output, hooks, credentials, signing prompts, and pinentry behavior. A hook or signing failure is therefore shown directly by Git and returns a failure from cocommit.
+After a valid submission, cocommit restores the terminal and runs `git commit` with inherited standard streams. This preserves normal Git output, hooks, credentials, signing prompts, and pinentry behavior. Commit messages are passed directly to Git without shell interpretation. A hook or signing failure is therefore shown directly by Git and returns a failure from cocommit. Cancelling restores the terminal and exits successfully without invoking Git.
 
 ## v1 Limitations
 
 - Only Conventional Commit headers are supported; bodies, footers, amend mode, and empty commits are not supported.
 - cocommit does not stage or unstage files, show diffs or history, manage branches, push, or create pull requests.
 - It does not replace Git identity, hooks, credentials, editors, or signing configuration.
-- Repository-local configuration, configurable types or scopes, CLI prefills, dry runs, and AI-generated messages are out of scope.
+- AI-generated messages, changelog generation, dry runs, copy-only mode, and CLI field prefills are not supported.
+- Configuration is global only; repository-local settings and configurable types, scopes, or issue formatting are not supported.
 
 ## Development
+
+Run directly from a local checkout:
+
+```bash
+cargo run --locked
+```
+
+Install the local version:
+
+```bash
+cargo install --path . --locked
+```
 
 Run the complete local quality suite with:
 
 ```bash
 make check
 ```
-
-See [docs/](docs/README.md) for the product, architecture, interaction, Git, and testing contracts.
 
 ## License
 
