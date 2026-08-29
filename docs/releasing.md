@@ -1,5 +1,7 @@
 # Releasing cocommit
 
+> **Pre-release policy:** `cocommit` must not create a tag, GitHub Release, or crates.io package until Iterations 10 through 22 and the `0.1.0` release gate in the [roadmap](roadmap.md) are complete. The workflows below describe the Phase 9 implementation and will be hardened before first use. In particular, do not promote the current `0.1.0` version to `main` while `release.yml` still creates a release on every push to `main`.
+
 `cocommit` uses three separate GitHub Actions workflows so each release boundary is explicit:
 
 1. **Bump Version** creates a draft version-bump pull request.

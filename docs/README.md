@@ -10,14 +10,16 @@ Read the documents in this order:
 4. [Git and configuration](git-and-configuration.md)
 5. [Testing strategy](testing-strategy.md)
 6. [Implementation plan](implementation-plan.md)
-7. [Releasing](releasing.md)
-8. [Architecture decisions](decisions/)
+7. [Roadmap](roadmap.md)
+8. [Releasing](releasing.md)
+9. [Architecture decisions](decisions/)
 
 ## Project status
 
-- Planning: complete
-- Rust implementation: complete through Phase 8
-- Current work: Phase 9 release pipeline
+- Initial planning: complete
+- Rust implementation: complete through Phase 9
+- Current work: pre-release roadmap, beginning with Iteration 10 release control
+- Release status: private pre-release; no public package or release exists
 - Supported scope: Conventional Commit header creation from already staged changes
 
 ## Guiding principles
