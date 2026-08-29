@@ -48,7 +48,11 @@ fn render_expanded(frame: &mut Frame, app: &App, area: Rect) {
             Constraint::Length(3),
             Constraint::Length(3),
             Constraint::Length(3),
-            Constraint::Length(3),
+            Constraint::Length(if app.validation_message().is_some() {
+                3
+            } else {
+                0
+            }),
             Constraint::Min(1),
         ])
         .split(inner);
@@ -98,7 +102,9 @@ fn render_expanded(frame: &mut Frame, app: &App, area: Rect) {
     );
     render_submit_row(frame, rows[6], app.focus == Focus::Submit);
     render_preview(frame, rows[7], &app.preview());
-    render_status(frame, rows[8], app.validation_message());
+    if let Some(status) = app.validation_message() {
+        render_status(frame, rows[8], status);
+    }
     render_footer(frame, rows[9]);
 
     if let Mode::TypePicker(picker) = &app.mode {
@@ -333,10 +339,10 @@ fn render_preview(frame: &mut Frame, area: Rect, preview: &str) {
     );
 }
 
-fn render_status(frame: &mut Frame, area: Rect, status: Option<&str>) {
+fn render_status(frame: &mut Frame, area: Rect, status: &str) {
     frame.render_widget(
-        Paragraph::new(status.unwrap_or(""))
-            .block(Block::default().borders(Borders::ALL).title(" Status "))
+        Paragraph::new(status)
+            .block(Block::default().borders(Borders::ALL).title(" Error "))
             .style(Style::default().fg(Color::Red))
             .wrap(Wrap { trim: true }),
         area,
@@ -435,7 +441,6 @@ fn render_picker(frame: &mut Frame, area: Rect, picker: &TypePickerState) -> Opt
 fn choice_label(choice: &TypeChoice) -> String {
     match choice {
         TypeChoice::Standard(value) => value.clone(),
-        TypeChoice::Custom => "custom...".to_owned(),
         TypeChoice::CustomQuery(value) => format!("Use \"{}\"", value),
     }
 }

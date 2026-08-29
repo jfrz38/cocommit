@@ -62,10 +62,17 @@ fn space_only_toggles_boolean_controls() {
 }
 
 #[test]
-fn text_editing_is_limited_to_form_text_fields() {
+fn typing_on_type_opens_the_picker_with_the_typed_query() {
     let mut app = App::new(false);
-    app.handle(AppEvent::Edit(Edit::Insert('x')));
-    assert_eq!(app.form.commit_type.to_string(), "feat");
+    app.handle(AppEvent::Edit(Edit::Insert('d')));
+    let Mode::TypePicker(picker) = &app.mode else {
+        panic!("type picker should be open");
+    };
+    assert_eq!(picker.query.to_string(), "d");
+    assert_eq!(picker.choices()[0], TypeChoice::Standard("docs".to_owned()));
+
+    app.handle(AppEvent::Enter);
+    assert_eq!(app.form.commit_type.to_string(), "docs");
 
     focus(&mut app, Focus::Scope);
     app.handle(AppEvent::Edit(Edit::Insert('a')));
@@ -94,16 +101,16 @@ fn enter_opens_picker_and_selects_standard_type() {
 }
 
 #[test]
-fn picker_uses_case_insensitive_substring_filtering() {
+fn picker_uses_case_insensitive_prefix_filtering() {
     let mut picker = TypePickerState {
-        query: Input::new("EF".to_owned()),
+        query: Input::new("DO".to_owned()),
         highlighted: 0,
     };
     assert_eq!(
         picker.choices(),
         vec![
-            TypeChoice::Standard("refactor".to_owned()),
-            TypeChoice::CustomQuery("EF".to_owned())
+            TypeChoice::Standard("docs".to_owned()),
+            TypeChoice::CustomQuery("DO".to_owned())
         ]
     );
 
@@ -128,6 +135,18 @@ fn picker_custom_query_is_selected() {
 }
 
 #[test]
+fn picker_accepts_a_query_without_a_matching_prefix() {
+    let mut app = App::new(false);
+    app.handle(AppEvent::Edit(Edit::Insert('d')));
+    app.handle(AppEvent::Edit(Edit::Insert('o')));
+    app.handle(AppEvent::Edit(Edit::Insert('s')));
+    app.handle(AppEvent::Enter);
+
+    assert_eq!(app.form.commit_type.to_string(), "dos");
+    assert_eq!(app.focus, Focus::Scope);
+}
+
+#[test]
 fn picker_escape_keeps_existing_type_and_tabs_do_nothing() {
     let mut app = App::new(false);
     app.handle(AppEvent::Enter);
@@ -138,6 +157,26 @@ fn picker_escape_keeps_existing_type_and_tabs_do_nothing() {
     assert!(matches!(app.mode, Mode::Form));
     assert_eq!(app.form.commit_type.to_string(), "feat");
     assert_eq!(app.focus, Focus::CommitType);
+}
+
+#[test]
+fn cancelling_a_type_search_keeps_existing_validation_feedback() {
+    let mut app = App::new(false);
+    app.validation_error = Some(ValidationError {
+        field: DraftField::Message,
+        kind: ValidationErrorKind::Required,
+    });
+
+    app.handle(AppEvent::Edit(Edit::Insert('d')));
+    app.handle(AppEvent::Escape);
+
+    assert_eq!(
+        app.validation_error,
+        Some(ValidationError {
+            field: DraftField::Message,
+            kind: ValidationErrorKind::Required,
+        })
+    );
 }
 
 #[test]

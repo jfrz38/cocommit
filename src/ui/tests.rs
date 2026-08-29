@@ -4,17 +4,42 @@ use tui_input::Input;
 use super::*;
 
 fn draw(app: &App, width: u16, height: u16) {
+    let _ = rendered(app, width, height);
+}
+
+fn rendered(app: &App, width: u16, height: u16) -> String {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).expect("test terminal should initialize");
     terminal
         .draw(|frame| render(frame, app))
         .expect("rendering should not fail");
+    terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect()
 }
 
 #[test]
 fn renders_form_at_normal_terminal_size() {
     let app = App::new(false);
     draw(&app, 100, 40);
+}
+
+#[test]
+fn renders_error_only_after_validation_fails() {
+    let mut app = App::new(false);
+    assert!(!rendered(&app, 100, 40).contains("Error"));
+
+    app.validation_error = Some(crate::commit::ValidationError {
+        field: crate::commit::DraftField::Message,
+        kind: crate::commit::ValidationErrorKind::Required,
+    });
+    let output = rendered(&app, 100, 40);
+    assert!(output.contains("Error"));
+    assert!(output.contains("Message is required"));
 }
 
 #[test]
@@ -54,7 +79,7 @@ fn renders_help_overlay_at_both_terminal_sizes() {
 }
 
 #[test]
-fn renders_every_focus_with_long_unicode_input_and_status() {
+fn renders_every_focus_with_long_unicode_input_and_error() {
     let mut app = App::new(false);
     app.form.scope = Input::new("biblioteca-privada".repeat(5));
     app.form.message = Input::new("Añade soporte Unicode ".repeat(5));

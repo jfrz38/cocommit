@@ -84,7 +84,7 @@ Invalid submission keeps the form open, displays a field-specific error, and foc
 | Ctrl+C | Cancel without invoking Git. |
 | Backspace / Delete / Home / End | Edit a text field or type-picker query. |
 
-The type picker filters standard types with a case-insensitive substring search. A nonstandard query can be selected as a custom type. cocommit is keyboard-driven and does not support mouse input.
+Typing while Type is focused opens the picker and filters standard types with a case-insensitive prefix search. For example, `d` and `do` select `docs` by default; a query with no matching prefix can be selected as a custom type. cocommit is keyboard-driven and does not support mouse input.
 
 The layout switches to a compact, vertically scrolling view in smaller terminals. Below `30x8`, it displays a resize instruction instead of the form.
 
