@@ -1,6 +1,6 @@
 mod app;
 pub mod commit;
-mod config;
+pub mod config;
 mod event;
 mod git;
 mod terminal;
