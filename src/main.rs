@@ -1,5 +1,5 @@
 mod app;
-mod commit;
+pub mod commit;
 mod config;
 mod event;
 mod git;
