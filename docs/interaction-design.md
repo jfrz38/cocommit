@@ -19,13 +19,13 @@ The interface remains compact and needs no mouse support.
 ├─ Status ──────────────────────────────────┤
 │ Message is required                       │
 ├───────────────────────────────────────────┤
-│ Tab Next  Shift+Tab Previous  Esc Cancel  │
+│ Up/Down Navigate  Ctrl+Enter Commit  Esc  │
 └────────────────────────────────────────────┘
 ```
 
 The focused row must have a visually distinct border, label, or background. The preview is rebuilt from the current draft after every edit. Status is empty until a validation or configuration warning needs to be shown.
 
-For terminals too small to safely draw the layout, render only a clear resize instruction. Do not construct invalid Ratatui layout areas.
+The full bordered layout is used when space allows. Smaller terminals use compact one-line rows with automatic vertical scrolling that keeps the focused field visible. For terminals too small to safely draw even the compact layout, render only a clear resize instruction. Do not construct invalid Ratatui layout areas.
 
 ## Focus model
 
@@ -35,7 +35,7 @@ Focus advances in this order:
 Type -> Scope -> Breaking -> Message -> Issue -> Sign -> Submit
 ```
 
-`Tab` moves forward and wraps. `Shift+Tab` moves backward and wraps. Text input is active only for Type's popup search, Scope, Message, and Issue.
+`Up` and `Down` move backward and forward through fields, respectively, and wrap. `Tab` and `Shift+Tab` provide the same forward and reverse navigation. Text input is active only for Type's popup search, Scope, Message, and Issue.
 
 ## Keyboard behavior
 
@@ -43,11 +43,13 @@ Type -> Scope -> Breaking -> Message -> Issue -> Sign -> Submit
 |---|---|---|
 | `Tab` | Next field | No action |
 | `Shift+Tab` | Previous field | No action |
+| `Up` / `Down` | Previous / next field | Change highlighted item |
 | `Enter` | Open Type picker, advance text field, or submit from Commit | Select highlighted item |
+| `Ctrl+Enter` | Submit from any field | No action |
+| `F1` | Open or close help | Open or close help |
 | `Space` | Toggle Breaking or Sign when focused | Insert a search space |
 | `Esc` | Cancel application | Close picker and keep existing type |
 | `Ctrl+C` | Cancel application | Cancel application |
-| `Up` / `Down` | No action | Change highlighted item |
 | Printable text | Edit focused text field | Filter choices |
 | Backspace/Delete/Home/End | Edit focused text field | Edit search query |
 | Paste | Insert sanitized one-line text | Insert sanitized search query |
@@ -72,6 +74,10 @@ The custom value remains subject to normal Type validation on submission.
 ## Submission feedback
 
 Commit is an explicit focusable action. There is no confirmation modal: navigating to it and pressing `Enter` already prevents accidental commits while keeping the flow short.
+
+`Ctrl+Enter` submits from any form field without moving focus first. It follows the same validation path as Commit and is ignored while the Type picker is open.
+
+`F1` opens a help popup without changing the current form or picker state. `Esc` closes the popup and restores the previous state.
 
 On validation failure:
 

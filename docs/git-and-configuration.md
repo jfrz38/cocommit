@@ -83,7 +83,7 @@ Typical paths are:
 Initial schema:
 
 ```toml
-sign = false
+sign = true
 ```
 
 ```rust
@@ -97,6 +97,7 @@ pub struct Config {
 Rules:
 
 - Missing config file or unavailable config directory: use defaults.
+- The default enables `Sign (-S)`; set `sign = false` to disable the explicit `-S` request.
 - Existing unreadable file: return an actionable error with its path.
 - Invalid TOML or unknown keys: return a parse error rather than silently ignore a typo.
 - Do not create config files or directories automatically.

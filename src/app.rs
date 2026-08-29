@@ -2,7 +2,7 @@
 
 use tui_input::{Input, InputRequest};
 
-use crate::commit::{CommitDraft, DraftField, ValidationError};
+use crate::commit::{CommitDraft, DraftField, ValidationError, ValidationErrorKind};
 
 pub const STANDARD_TYPES: [&str; 11] = [
     "feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert",
@@ -33,6 +33,7 @@ pub enum AppEvent {
     Tab,
     BackTab,
     Enter,
+    Submit,
     Space,
     Escape,
     Cancel,
@@ -41,6 +42,7 @@ pub enum AppEvent {
     Edit(Edit),
     Paste(String),
     Resize(u16, u16),
+    Help,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -108,6 +110,7 @@ pub enum TypeChoice {
 pub enum Mode {
     Form,
     TypePicker(TypePickerState),
+    Help(Box<Mode>),
 }
 
 #[derive(Debug, Clone)]
@@ -140,17 +143,89 @@ impl App {
         self.form.draft()
     }
 
+    /// Renders the current form state without requiring it to be valid for submission.
+    pub fn preview(&self) -> String {
+        let issue = CommitDraft::parse_issue(&self.form.issue.to_string())
+            .ok()
+            .flatten();
+        CommitDraft::new(
+            self.form.commit_type.to_string(),
+            Some(self.form.scope.to_string()),
+            self.form.breaking,
+            self.form.message.to_string(),
+            issue,
+        )
+        .render_message()
+    }
+
+    /// Returns a concise message suitable for the form status area.
+    pub fn validation_message(&self) -> Option<&'static str> {
+        self.validation_error
+            .map(|error| match (error.field, error.kind) {
+                (DraftField::CommitType, ValidationErrorKind::Required) => "Type is required",
+                (DraftField::CommitType, ValidationErrorKind::MustBeSingleLine) => {
+                    "Type must be one line"
+                }
+                (DraftField::CommitType, ValidationErrorKind::ContainsWhitespace) => {
+                    "Type cannot contain whitespace"
+                }
+                (DraftField::CommitType, ValidationErrorKind::ContainsForbiddenCharacter) => {
+                    "Type contains an invalid character"
+                }
+                (DraftField::Scope, ValidationErrorKind::MustBeSingleLine) => {
+                    "Scope must be one line"
+                }
+                (DraftField::Scope, ValidationErrorKind::ContainsForbiddenCharacter) => {
+                    "Scope cannot contain parentheses"
+                }
+                (DraftField::Message, ValidationErrorKind::Required) => "Message is required",
+                (DraftField::Message, ValidationErrorKind::MustBeSingleLine) => {
+                    "Message must be one line"
+                }
+                (DraftField::Issue, ValidationErrorKind::InvalidDecimal) => {
+                    "Issue must be a decimal number"
+                }
+                (DraftField::Issue, ValidationErrorKind::IntegerOutOfRange) => "Issue is too large",
+                _ => "Invalid value",
+            })
+    }
+
     pub fn handle(&mut self, event: AppEvent) -> AppAction {
+        if matches!(event, AppEvent::Help) {
+            self.toggle_help();
+            return AppAction::Continue;
+        }
+        if matches!(event, AppEvent::Escape) && matches!(self.mode, Mode::Help(_)) {
+            self.close_help();
+            return AppAction::Continue;
+        }
         match &mut self.mode {
             Mode::Form => self.handle_form(event),
             Mode::TypePicker(_) => self.handle_picker(event),
+            Mode::Help(_previous) => match event {
+                AppEvent::Cancel => AppAction::Cancel,
+                _ => AppAction::Continue,
+            },
+        }
+    }
+
+    fn toggle_help(&mut self) {
+        self.mode = match std::mem::replace(&mut self.mode, Mode::Form) {
+            Mode::Help(previous) => *previous,
+            previous => Mode::Help(Box::new(previous)),
+        };
+    }
+
+    fn close_help(&mut self) {
+        if let Mode::Help(previous) = std::mem::replace(&mut self.mode, Mode::Form) {
+            self.mode = *previous;
         }
     }
 
     fn handle_form(&mut self, event: AppEvent) -> AppAction {
         match event {
-            AppEvent::Tab => self.focus = self.focus.next(),
-            AppEvent::BackTab => self.focus = self.focus.previous(),
+            AppEvent::Tab | AppEvent::Down => self.focus = self.focus.next(),
+            AppEvent::BackTab | AppEvent::Up => self.focus = self.focus.previous(),
             AppEvent::Enter => match self.focus {
                 Focus::CommitType => self.open_picker(),
                 Focus::Scope => self.focus = Focus::Breaking,
@@ -159,6 +234,7 @@ impl App {
                 Focus::Submit => return self.submit(),
                 Focus::Breaking | Focus::Sign => {}
             },
+            AppEvent::Submit => return self.submit(),
             AppEvent::Space => match self.focus {
                 Focus::Breaking => {
                     self.form.breaking = !self.form.breaking;
@@ -174,7 +250,7 @@ impl App {
             AppEvent::Escape | AppEvent::Cancel => return AppAction::Cancel,
             AppEvent::Edit(edit) => self.edit_form(edit),
             AppEvent::Paste(value) => self.paste_form(&value),
-            AppEvent::Up | AppEvent::Down | AppEvent::Resize(_, _) => {}
+            AppEvent::Resize(_, _) | AppEvent::Help => {}
         }
         AppAction::Continue
     }
@@ -189,7 +265,11 @@ impl App {
             AppEvent::Edit(edit) => self.edit_picker(edit),
             AppEvent::Paste(value) => self.paste_picker(&value),
             AppEvent::Space => self.edit_picker(Edit::Insert(' ')),
-            AppEvent::Tab | AppEvent::BackTab | AppEvent::Resize(_, _) => {}
+            AppEvent::Tab
+            | AppEvent::BackTab
+            | AppEvent::Submit
+            | AppEvent::Resize(_, _)
+            | AppEvent::Help => {}
         }
         AppAction::Continue
     }

@@ -26,7 +26,7 @@ Implement `Config::default`, config path resolution, TOML parsing, and file-load
 
 Completion criteria:
 
-- Absent config behaves as `sign = false`.
+- Absent config behaves as `sign = true`.
 - Invalid existing config fails before terminal initialization.
 
 ## Phase 4: Git preflight and commands
