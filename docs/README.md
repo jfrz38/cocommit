@@ -1,6 +1,6 @@
 # cocommit documentation
 
-This directory is the implementation contract for `cocommit`. The project is planned, but not implemented yet.
+This directory is the implementation contract for `cocommit`. It records the product and technical decisions implemented by the Rust application.
 
 Read the documents in this order:
 
@@ -15,7 +15,8 @@ Read the documents in this order:
 ## Project status
 
 - Planning: complete
-- Rust implementation: not started
+- Rust implementation: complete through Phase 7
+- Current work: Phase 8 documentation and release readiness
 - Supported scope: Conventional Commit header creation from already staged changes
 
 ## Guiding principles
