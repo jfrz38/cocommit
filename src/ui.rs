@@ -15,6 +15,7 @@ const MIN_WIDTH: u16 = 30;
 const MIN_HEIGHT: u16 = 8;
 const EXPANDED_WIDTH: u16 = 50;
 const EXPANDED_HEIGHT: u16 = 30;
+const FOOTER: &str = "F1 Help  Up/Down Navigate  Space Toggle  Ctrl+Enter Commit  Esc Cancel";
 
 /// Draws the complete application state.
 pub fn render(frame: &mut Frame, app: &App) {
@@ -168,7 +169,7 @@ fn render_compact(frame: &mut Frame, app: &App, area: Rect) {
         );
     }
     frame.render_widget(
-        Paragraph::new("Up/Down Navigate  Space Toggle  Ctrl+Enter Commit  F1 Help  Esc Cancel")
+        Paragraph::new(FOOTER)
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true }),
         rows[3],
@@ -344,7 +345,7 @@ fn render_status(frame: &mut Frame, area: Rect, status: Option<&str>) {
 
 fn render_footer(frame: &mut Frame, area: Rect) {
     frame.render_widget(
-        Paragraph::new("Up/Down Navigate  Space Toggle  Ctrl+Enter Commit  F1 Help  Esc Cancel")
+        Paragraph::new(FOOTER)
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true }),
         area,
@@ -363,7 +364,7 @@ fn render_help(frame: &mut Frame, area: Rect) {
     frame.render_widget(Clear, popup);
     frame.render_widget(
         Paragraph::new(
-            "Keyboard help\n\nUp / Down      Move between fields\nTab / Shift+Tab  Next / previous field\nEnter          Open or select Type\nSpace          Toggle Breaking or Sign\nCtrl+Enter     Commit the current form\nEsc            Close help or cancel\nCtrl+C         Cancel application\nF1             Open or close help",
+            "Keyboard help\n\nUp / Down        Move between fields\nTab / Shift+Tab  Next / previous field\nEnter            Open or select Type\nSpace            Toggle Breaking or Sign\nCtrl+Enter       Commit the current form\nEsc              Close help or cancel\nCtrl+C           Cancel application\nF1               Open or close help",
         )
         .block(
             Block::default()
