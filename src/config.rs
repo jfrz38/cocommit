@@ -10,10 +10,16 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 
 /// Global preferences for cocommit's user interface.
-#[derive(Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     pub sign: bool,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self { sign: true }
+    }
 }
 
 /// Returns the optional global configuration file location.

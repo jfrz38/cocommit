@@ -3,8 +3,8 @@ use std::fs;
 use super::{Config, config_path, load_from_path, parse};
 
 #[test]
-fn defaults_signing_to_disabled() {
-    assert_eq!(Config::default(), Config { sign: false });
+fn defaults_signing_to_enabled() {
+    assert_eq!(Config::default(), Config { sign: true });
 }
 
 #[test]
