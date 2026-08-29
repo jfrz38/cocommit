@@ -1,6 +1,6 @@
 # 🥥 cocommit
 
-**Craft Conventional Commits without leaving your terminal.**
+**Craft well-formatted Conventional Commit headers without leaving your terminal.**
 
 [![CI](https://github.com/jfrz38/cocommit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jfrz38/cocommit/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/cocommit?logo=rust)](https://crates.io/crates/cocommit)
@@ -9,6 +9,8 @@
 [![MSRV](https://img.shields.io/badge/rustc-1.94.1%2B-blue)](https://www.rust-lang.org)
 
 `cocommit` is a small keyboard-driven terminal UI for creating Conventional Commit headers from already staged changes. It previews the message as you edit it, then delegates the commit to your installed Git CLI.
+
+The name combines **CO**nventional and **COMMIT**s, hence the coconut 🥥.
 
 ```text
 feat(api)!: add authentication (#123)
