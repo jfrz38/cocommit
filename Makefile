@@ -26,10 +26,13 @@ lint: ## run Clippy with warnings denied
 test: ## run all tests
 	$(CARGO) test --locked --all-targets --all-features
 
-.PHONY: check release-check ci
+.PHONY: check release-check release-check-clean ci
 check: fmt-check lint test build ## run all local quality checks
 
 release-check: check ## verify the package can be published
 	$(CARGO) publish --dry-run --locked --allow-dirty
+
+release-check-clean: check ## verify a clean checkout can be published
+	$(CARGO) publish --dry-run --locked
 
 ci: check ## run the deterministic CI checks

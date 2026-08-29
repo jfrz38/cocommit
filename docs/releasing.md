@@ -1,11 +1,11 @@
 # Releasing cocommit
 
-> **Pre-release policy:** `cocommit` must not create a tag, GitHub Release, or crates.io package until Iterations 10 through 22 and the `0.1.0` release gate in the [roadmap](roadmap.md) are complete. The workflows below describe the Phase 9 implementation and will be hardened before first use. In particular, do not promote the current `0.1.0` version to `main` while `release.yml` still creates a release on every push to `main`.
+> **Pre-release policy:** `cocommit` must not create a tag, GitHub Release, or crates.io package until Iterations 10 through 22 and the `0.1.0` release gate in the [roadmap](roadmap.md) are complete. The workflows below are hardened for the approved automatic GitHub Release flow, but must be rehearsed privately before their first use.
 
 `cocommit` uses three separate GitHub Actions workflows so each release boundary is explicit:
 
 1. **Bump Version** creates a draft version-bump pull request.
-2. **Create Release** runs after a push to `main` and creates the matching GitHub Release.
+2. **Create Release** validates a push to `main` and creates the matching GitHub Release when the version is new.
 3. **Publish Package** is run manually from `main` and publishes the latest GitHub Release to crates.io.
 
 The package version in `Cargo.toml`, its `v<version>` tag, its GitHub Release, and the crates.io version must all match.
@@ -20,24 +20,31 @@ The repository must allow GitHub Actions to create pull requests at **Settings >
 
 ## Create the GitHub Release
 
-Every push to `main` runs **Create Release**. It runs `make release-check`, reads the stable SemVer version from `Cargo.toml`, creates `v<version>` at that exact commit, and generates GitHub release notes.
+Every push to `main` runs **Create Release**. An unprivileged job checks out the exact pushed commit, requires a clean worktree, runs `make release-check-clean`, and uses `check-version-change` to compare the `Cargo.toml` version with the preceding commit. It uses the action's validated local stable SemVer as the release version. Only after that succeeds can the separate `contents: write` job create `v<version>` at that commit and generate GitHub release notes.
 
-If the matching GitHub Release already exists, the workflow does nothing. If a tag with that version points to a different commit, it fails instead of moving the tag.
+The tag is immutable. If the matching GitHub Release already exists, the workflow verifies its lightweight tag remains on a commit reachable from the pushed `main` commit and does nothing. A later merge with the same package version therefore does not rewrite a release. If a tag exists without a release, the workflow creates only the missing release. A release without a tag, an annotated tag, or a tag outside `main` history fails instead of moving or replacing anything.
 
 The workflow does not publish to crates.io.
 
+## Rehearse the release validation
+
+Run **Create Release** manually from the commit or branch to validate. Manual dispatch executes only the unprivileged validation job; it cannot create a tag or GitHub Release. Confirm in the Actions UI that `create-release` is skipped and that the validation log reports the expected SHA and version.
+
+Run the normal `main` path only after recording the rehearsal evidence. Before its first use, use a private test version or repository to verify first creation, repeated execution, later merges with the same version, tag-only recovery, and conflicting-state failures.
+
 ## Publish to crates.io
 
-After reviewing the GitHub Release, open **Publish Package** in GitHub Actions and run it from `main`. It:
+After reviewing the GitHub Release, open **Publish Package** in GitHub Actions and run it from `main`. Its unprivileged validation job selects the latest published stable release, excluding drafts and prereleases, then:
 
 1. Resolves the latest GitHub Release.
 2. Checks out its immutable tag.
 3. Verifies that the tag is reachable from `main` and that the tag version matches `Cargo.toml`.
 4. Verifies the version is not already present on crates.io.
-5. Runs `make release-check`.
-6. Publishes with a temporary crates.io token obtained through GitHub OIDC.
+5. Runs `make release-check-clean` and records the package checksum.
 
-The workflow never publishes the mutable `main` checkout and does not use a long-lived registry token.
+The separate publication job checks out that exact tag, repackages without package verification, requires the checksum to match, and then publishes with a temporary crates.io token obtained through GitHub OIDC.
+
+The workflow never publishes the mutable `main` checkout and does not use a long-lived registry token. Only its publication job has `id-token: write`.
 
 ## Trusted Publishing setup
 
@@ -73,4 +80,16 @@ Before merging a release bump, run:
 make release-check
 ```
 
-This runs formatting, Clippy, tests, a build, and `cargo publish --dry-run --locked --allow-dirty`. It packages and validates the crate but never uploads it. `--allow-dirty` lets maintainers validate a release bump before its pull request is committed; the publish workflow still checks out and publishes a clean release tag.
+This runs formatting, Clippy, tests, a build, and `cargo publish --dry-run --locked --allow-dirty`. It packages and validates the crate but never uploads it. `--allow-dirty` lets maintainers validate a release bump before its pull request is committed.
+
+Use the clean CI-equivalent validation for a committed candidate:
+
+```bash
+make release-check-clean
+```
+
+## Approval and recovery
+
+Configure any required GitHub Environment approval outside this repository. A `release` Environment can protect the release-creation job, and a separate `crates-publish` Environment can protect the irreversible publication job.
+
+Before crates.io publication, cancel a pending run or delete a mistaken GitHub Release only after confirming the immutable tag must remain for auditability. Never move or reuse that tag. After crates.io publication, use crates.io yanking where appropriate, mark the GitHub Release as withdrawn or superseded, and publish a corrected higher version.
