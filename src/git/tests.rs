@@ -1,6 +1,9 @@
 use std::io;
 
-use super::{commit_arguments, git_start_error, has_staged_changes, is_inside_work_tree};
+use super::{
+    StagedChangeKind, commit_arguments, git_start_error, has_staged_changes, is_inside_work_tree,
+    parse_name_status, parse_numstat,
+};
 
 #[test]
 fn builds_unsigned_commit_arguments() {
@@ -82,4 +85,38 @@ fn identifies_other_command_start_failures() {
 
     assert!(error.to_string().contains("failed to start"));
     assert!(error.to_string().contains("access denied"));
+}
+
+#[test]
+fn parses_nul_delimited_staged_statuses_without_splitting_paths() {
+    let files = parse_name_status(
+        b"A\0added file.txt\0M\0src/main.rs\0D\0deleted.txt\0R100\0old\tname\0new\nname\0",
+    )
+    .expect("name-status output should parse");
+
+    assert_eq!(files.len(), 4);
+    assert_eq!(files[0].kind, StagedChangeKind::Added);
+    assert_eq!(files[0].path, "added file.txt");
+    assert_eq!(files[1].kind, StagedChangeKind::Modified);
+    assert_eq!(files[2].kind, StagedChangeKind::Deleted);
+    assert_eq!(files[3].kind, StagedChangeKind::Renamed);
+    assert_eq!(files[3].previous_path.as_deref(), Some("old\\tname"));
+    assert_eq!(files[3].path, "new\\nname");
+}
+
+#[test]
+fn parses_numstat_totals_for_text_binary_and_renamed_files() {
+    let (insertions, deletions, binary_files) =
+        parse_numstat(b"2\t1\tadded.txt\0-\t-\timage.png\x003\t4\t\0old.txt\0new.txt\0")
+            .expect("numstat output should parse");
+
+    assert_eq!((insertions, deletions, binary_files), (5, 5, 1));
+}
+
+#[test]
+fn rejects_incomplete_renamed_file_records() {
+    let error = parse_name_status(b"R100\0old.txt\0")
+        .expect_err("a rename without a destination should fail");
+
+    assert!(error.to_string().contains("destination path"));
 }

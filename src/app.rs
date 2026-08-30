@@ -2,7 +2,10 @@
 
 use tui_input::{Input, InputRequest};
 
-use crate::commit::{CommitDraft, DraftField, ValidationError, ValidationErrorKind};
+use crate::{
+    commit::{CommitDraft, DraftField, ValidationError, ValidationErrorKind},
+    git::StagedChanges,
+};
 
 pub const STANDARD_TYPES: [&str; 11] = [
     "feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert",
@@ -21,6 +24,7 @@ pub enum Focus {
     Message,
     Issue,
     Sign,
+    StagedChanges,
     Submit,
 }
 
@@ -121,6 +125,8 @@ pub struct App {
     pub focus: Focus,
     pub mode: Mode,
     pub sign: bool,
+    pub staged_changes: StagedChanges,
+    pub staged_scroll: usize,
     pub validation_error: Option<ValidationError>,
     pub input_error: Option<&'static str>,
 }
@@ -138,6 +144,8 @@ impl App {
             focus: Focus::CommitType,
             mode: Mode::Form,
             sign,
+            staged_changes: StagedChanges::default(),
+            staged_scroll: 0,
             validation_error: None,
             input_error: None,
         }
@@ -145,6 +153,11 @@ impl App {
 
     pub fn draft(&self) -> Result<CommitDraft, Vec<ValidationError>> {
         self.form.draft()
+    }
+
+    pub fn set_staged_changes(&mut self, staged_changes: StagedChanges) {
+        self.staged_changes = staged_changes;
+        self.staged_scroll = 0;
     }
 
     /// Renders the current form state without requiring it to be valid for submission.
@@ -229,15 +242,25 @@ impl App {
 
     fn handle_form(&mut self, event: AppEvent) -> AppAction {
         match event {
-            AppEvent::Tab | AppEvent::Down => self.focus = self.focus.next(),
-            AppEvent::BackTab | AppEvent::Up => self.focus = self.focus.previous(),
+            AppEvent::Tab => self.focus = self.focus.next(),
+            AppEvent::BackTab => self.focus = self.focus.previous(),
+            AppEvent::Down if self.focus == Focus::StagedChanges => self.scroll_staged(1),
+            AppEvent::Up if self.focus == Focus::StagedChanges => self.scroll_staged(-1),
+            AppEvent::Down => self.focus = self.focus.next(),
+            AppEvent::Up => self.focus = self.focus.previous(),
+            AppEvent::Edit(Edit::Home) if self.focus == Focus::StagedChanges => {
+                self.staged_scroll = 0;
+            }
+            AppEvent::Edit(Edit::End) if self.focus == Focus::StagedChanges => {
+                self.staged_scroll = self.staged_changes.files.len().saturating_sub(1);
+            }
             AppEvent::Enter => match self.focus {
                 Focus::CommitType => self.open_picker(),
                 Focus::Scope => self.focus = Focus::Breaking,
                 Focus::Message => self.focus = Focus::Issue,
                 Focus::Issue => self.focus = Focus::Sign,
                 Focus::Submit => return self.submit(),
-                Focus::Breaking | Focus::Sign => {}
+                Focus::Breaking | Focus::Sign | Focus::StagedChanges => {}
             },
             AppEvent::Submit => return self.submit(),
             AppEvent::Space => match self.focus {
@@ -423,6 +446,12 @@ impl App {
         self.validation_error = None;
         self.input_error = None;
     }
+
+    fn scroll_staged(&mut self, direction: isize) {
+        let last = self.staged_changes.files.len().saturating_sub(1);
+        self.staged_scroll =
+            (self.staged_scroll as isize + direction).clamp(0, last as isize) as usize;
+    }
 }
 
 impl Focus {
@@ -433,7 +462,8 @@ impl Focus {
             Self::Breaking => Self::Message,
             Self::Message => Self::Issue,
             Self::Issue => Self::Sign,
-            Self::Sign => Self::Submit,
+            Self::Sign => Self::StagedChanges,
+            Self::StagedChanges => Self::Submit,
             Self::Submit => Self::CommitType,
         }
     }
@@ -446,7 +476,8 @@ impl Focus {
             Self::Message => Self::Breaking,
             Self::Issue => Self::Message,
             Self::Sign => Self::Issue,
-            Self::Submit => Self::Sign,
+            Self::StagedChanges => Self::Sign,
+            Self::Submit => Self::StagedChanges,
         }
     }
 }
@@ -478,7 +509,7 @@ fn field_limit(focus: Focus) -> usize {
         Focus::Message => MAX_MESSAGE_LENGTH,
         Focus::Issue => MAX_ISSUE_LENGTH,
         Focus::CommitType => MAX_TYPE_LENGTH,
-        Focus::Breaking | Focus::Sign | Focus::Submit => 0,
+        Focus::Breaking | Focus::Sign | Focus::StagedChanges | Focus::Submit => 0,
     }
 }
 

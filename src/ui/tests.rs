@@ -29,6 +29,30 @@ fn renders_form_at_normal_terminal_size() {
 }
 
 #[test]
+fn renders_staged_change_counts_and_a_scrolled_file_list() {
+    let mut app = App::new(false);
+    app.set_staged_changes(crate::git::StagedChanges {
+        files: (0..10)
+            .map(|index| crate::git::StagedFile {
+                kind: crate::git::StagedChangeKind::Added,
+                path: format!("src/archivo-{index}.rs"),
+                previous_path: None,
+            })
+            .collect(),
+        insertions: 12,
+        deletions: 3,
+        binary_files: 1,
+    });
+    app.focus = Focus::StagedChanges;
+    app.staged_scroll = 8;
+
+    let output = rendered(&app, 100, 40);
+    assert!(output.contains("Staged changes"));
+    assert!(output.contains("A:10 M:0 D:0 R:0"));
+    assert!(output.contains("archivo-9.rs"));
+}
+
+#[test]
 fn renders_error_only_after_validation_fails() {
     let mut app = App::new(false);
     assert!(!rendered(&app, 100, 40).contains("Error"));
@@ -95,6 +119,7 @@ fn renders_every_focus_with_long_unicode_input_and_error() {
         Focus::Message,
         Focus::Issue,
         Focus::Sign,
+        Focus::StagedChanges,
         Focus::Submit,
     ] {
         app.focus = focus;

@@ -16,6 +16,7 @@ fn tab_cycles_through_all_focus_targets() {
         Focus::Message,
         Focus::Issue,
         Focus::Sign,
+        Focus::StagedChanges,
         Focus::Submit,
         Focus::CommitType,
     ];
@@ -31,6 +32,7 @@ fn back_tab_cycles_in_reverse() {
     let mut app = App::new(false);
     let expected = [
         Focus::Submit,
+        Focus::StagedChanges,
         Focus::Sign,
         Focus::Issue,
         Focus::Message,
@@ -43,6 +45,35 @@ fn back_tab_cycles_in_reverse() {
         app.handle(AppEvent::BackTab);
         assert_eq!(app.focus, target);
     }
+}
+
+#[test]
+fn staged_changes_focus_scrolls_without_leaving_the_list() {
+    let mut app = App::new(false);
+    app.set_staged_changes(crate::git::StagedChanges {
+        files: vec![
+            crate::git::StagedFile {
+                kind: crate::git::StagedChangeKind::Added,
+                path: "one.txt".to_owned(),
+                previous_path: None,
+            },
+            crate::git::StagedFile {
+                kind: crate::git::StagedChangeKind::Modified,
+                path: "two.txt".to_owned(),
+                previous_path: None,
+            },
+        ],
+        ..Default::default()
+    });
+    focus(&mut app, Focus::StagedChanges);
+
+    app.handle(AppEvent::Down);
+    assert_eq!(app.focus, Focus::StagedChanges);
+    assert_eq!(app.staged_scroll, 1);
+    app.handle(AppEvent::Edit(Edit::Home));
+    assert_eq!(app.staged_scroll, 0);
+    app.handle(AppEvent::Edit(Edit::End));
+    assert_eq!(app.staged_scroll, 1);
 }
 
 #[test]

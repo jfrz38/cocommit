@@ -13,8 +13,8 @@ use crate::app::{App, Focus, Mode, TypeChoice, TypePickerState};
 
 const MIN_WIDTH: u16 = 30;
 const MIN_HEIGHT: u16 = 8;
-const EXPANDED_WIDTH: u16 = 50;
-const EXPANDED_HEIGHT: u16 = 30;
+const EXPANDED_WIDTH: u16 = 60;
+const EXPANDED_HEIGHT: u16 = 40;
 const FOOTER: &str = "F1 Help  Up/Down Navigate  Space Toggle  Ctrl+Enter Commit  Esc Cancel";
 
 /// Draws the complete application state.
@@ -46,6 +46,7 @@ fn render_expanded(frame: &mut Frame, app: &App, area: Rect) {
             Constraint::Length(3),
             Constraint::Length(3),
             Constraint::Length(3),
+            Constraint::Length(9),
             Constraint::Length(3),
             Constraint::Length(3),
             Constraint::Length(if app.validation_message().is_some() {
@@ -100,12 +101,13 @@ fn render_expanded(frame: &mut Frame, app: &App, area: Rect) {
         app.sign,
         app.focus == Focus::Sign,
     );
-    render_submit_row(frame, rows[6], app.focus == Focus::Submit);
+    render_staged_changes(frame, rows[6], app);
     render_preview(frame, rows[7], &app.preview());
+    render_submit_row(frame, rows[8], app.focus == Focus::Submit);
     if let Some(status) = app.validation_message() {
-        render_status(frame, rows[8], status);
+        render_status(frame, rows[9], status);
     }
-    render_footer(frame, rows[9]);
+    render_footer(frame, rows[10]);
 
     if let Mode::TypePicker(picker) = &app.mode {
         cursor = render_picker(frame, area, picker);
@@ -153,7 +155,7 @@ fn render_compact(frame: &mut Frame, app: &App, area: Rect) {
 
     let scroll = focus_index(app.focus).saturating_sub(usize::from(form_height.saturating_sub(1)));
     let mut cursor = None;
-    for index in scroll..(scroll + usize::from(form_height)).min(7) {
+    for index in scroll..(scroll + usize::from(form_height)).min(8) {
         let row = Rect::new(
             rows[0].x,
             rows[0].y + (index - scroll) as u16,
@@ -226,19 +228,26 @@ fn render_compact_row(frame: &mut Frame, area: Rect, app: &App, index: usize) ->
             app.focus == Focus::Issue,
         ),
         5 => ("Sign (-S)", None, Some(app.sign), app.focus == Focus::Sign),
-        6 => ("", None, None, app.focus == Focus::Submit),
+        6 => ("Staged", None, None, app.focus == Focus::StagedChanges),
+        7 => ("", None, None, app.focus == Focus::Submit),
         _ => return None,
     };
     let style = focused_style(focused);
     let content = match toggle {
         Some(value) => format!("{label:<10} [{}]", if value { "x" } else { " " }),
-        None if index == 6 => "[ Commit ]".to_owned(),
+        None if index == 7 => "[ Commit ]".to_owned(),
+        None if index == 6 => format!(
+            "{label:<10} {} files  +{} -{}",
+            app.staged_changes.files.len(),
+            app.staged_changes.insertions,
+            app.staged_changes.deletions,
+        ),
         None => format!("{label:<10}"),
     };
     frame.render_widget(
         Paragraph::new(content)
             .style(style)
-            .alignment(if index == 6 {
+            .alignment(if index == 7 {
                 Alignment::Center
             } else {
                 Alignment::Left
@@ -279,7 +288,8 @@ fn focus_index(focus: Focus) -> usize {
         Focus::Message => 3,
         Focus::Issue => 4,
         Focus::Sign => 5,
-        Focus::Submit => 6,
+        Focus::StagedChanges => 6,
+        Focus::Submit => 7,
     }
 }
 
@@ -339,6 +349,58 @@ fn render_preview(frame: &mut Frame, area: Rect, preview: &str) {
     );
 }
 
+fn render_staged_changes(frame: &mut Frame, area: Rect, app: &App) {
+    let focused = app.focus == Focus::StagedChanges && matches!(app.mode, Mode::Form);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Staged changes (snapshot) ")
+        .border_style(focused_style(focused));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let summary = format!(
+        "{} files  {}  +{} -{}{}",
+        app.staged_changes.files.len(),
+        app.staged_changes.status_summary(),
+        app.staged_changes.insertions,
+        app.staged_changes.deletions,
+        if app.staged_changes.binary_files == 0 {
+            String::new()
+        } else {
+            format!("  {} binary", app.staged_changes.binary_files)
+        },
+    );
+    let summary_area = Rect::new(inner.x, inner.y, inner.width, inner.height.min(1));
+    frame.render_widget(
+        Paragraph::new(summary).style(focused_style(focused)),
+        summary_area,
+    );
+
+    let list_height = usize::from(inner.height.saturating_sub(1));
+    if list_height == 0 {
+        return;
+    }
+    let max_scroll = app.staged_changes.files.len().saturating_sub(list_height);
+    let scroll = app.staged_scroll.min(max_scroll);
+    let items = app
+        .staged_changes
+        .files
+        .iter()
+        .skip(scroll)
+        .take(list_height)
+        .map(|file| ListItem::new(file.label()))
+        .collect::<Vec<_>>();
+    frame.render_widget(
+        List::new(items).style(focused_style(focused)),
+        Rect::new(
+            inner.x,
+            inner.y.saturating_add(1),
+            inner.width,
+            inner.height.saturating_sub(1),
+        ),
+    );
+}
+
 fn render_status(frame: &mut Frame, area: Rect, status: &str) {
     frame.render_widget(
         Paragraph::new(status)
@@ -370,7 +432,7 @@ fn render_help(frame: &mut Frame, area: Rect) {
     frame.render_widget(Clear, popup);
     frame.render_widget(
         Paragraph::new(
-            "Keyboard help\n\nUp / Down        Move between fields\nTab / Shift+Tab  Next / previous field\nEnter            Open or select Type\nSpace            Toggle Breaking or Sign\nCtrl+Enter       Commit the current form\nEsc              Close help or cancel\nCtrl+C           Cancel application\nF1               Open or close help",
+            "Keyboard help\n\nUp / Down        Move between fields or scroll staged changes\nTab / Shift+Tab  Next / previous field\nHome / End       First / last staged file\nEnter            Open or select Type\nSpace            Toggle Breaking or Sign\nCtrl+Enter       Commit the current form\nEsc              Close help or cancel\nCtrl+C           Cancel application\nF1               Open or close help",
         )
         .block(
             Block::default()
