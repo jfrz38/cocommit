@@ -12,6 +12,8 @@ The sole v1 workflow is:
 4. Select Commit.
 5. Let the installed Git CLI create the commit.
 
+The supported non-interactive commands are `cocommit --help` and `cocommit --version`. All other arguments are rejected; field prefills and automation remain out of scope.
+
 ## Commit header
 
 The canonical rendered format is:
@@ -40,6 +42,7 @@ feat(api): add authentication (#123)
 - Provide a live preview for every draft change.
 - Support an explicit `-S` Git signing choice.
 - Refuse to open the form outside a usable non-bare Git working tree or when there are no staged changes.
+- Refuse to open the form when standard input or standard output is not an interactive terminal.
 - Show Git's own output when committing succeeds or fails.
 
 ## Non-goals for v1

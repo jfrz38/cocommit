@@ -29,15 +29,17 @@ Interpretation:
 
 | Check | Result | Behavior |
 |---|---|---|
-| `rev-parse` cannot start | Git is unavailable | Return a clear error. |
-| `rev-parse` fails or does not print `true` | Not a usable working tree | Return a clear error. |
+| `rev-parse` cannot start | Git is unavailable or cannot execute | Identify the command; identify a missing executable separately. |
+| `rev-parse` fails or does not print `true` | Not a usable working tree | Identify the command and preserve Git stderr. |
 | `diff --cached --quiet` exits `0` | No staged changes | Return a clear error. |
 | `diff --cached --quiet` exits `1` | Staged changes exist | Open the TUI. |
-| `diff --cached --quiet` exits otherwise | Git failure | Return Git error context. |
+| `diff --cached --quiet` exits otherwise | Git failure | Identify the command and preserve Git stderr. |
 
 This naturally supports Git worktrees and subdirectories because Git resolves repository context. Bare repositories are rejected because `--is-inside-work-tree` is not `true`.
 
 The index can change after preflight. Git remains authoritative and may still reject the commit.
+
+Diagnostics keep Git's stderr for failed preflight commands. This preserves useful context for permission errors, `safe.directory`, corrupt repositories, and other Git-owned checks without attempting to classify every Git error.
 
 ## Commit execution
 
