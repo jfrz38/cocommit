@@ -186,7 +186,8 @@ impl App {
             .files
             .iter()
             .zip(&self.staged_included)
-            .filter_map(|(file, included)| (!included).then(|| file.clone()))
+            .filter(|&(_, included)| !included)
+            .map(|(file, _)| file.clone())
             .collect()
     }
 

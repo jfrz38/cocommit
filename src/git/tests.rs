@@ -30,7 +30,7 @@ fn builds_literal_unstage_arguments_for_head_and_initial_repositories() {
     );
 
     assert_eq!(
-        unstage_arguments(&[file.clone()], true),
+        unstage_arguments(std::slice::from_ref(&file), true),
         [
             "--literal-pathspecs",
             "restore",
