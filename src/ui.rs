@@ -252,7 +252,7 @@ fn render_compact_row(frame: &mut Frame, area: Rect, app: &App, index: usize) ->
     let scroll = input.visual_scroll(input_width);
     frame.render_widget(
         Paragraph::new(input.to_string())
-            .scroll((0, scroll as u16))
+            .scroll((0, clamp_scroll(scroll)))
             .style(style),
         Rect::new(input_x, area.y, input_width as u16, 1),
     );
@@ -296,7 +296,7 @@ fn render_text_row(
     let scroll = input.visual_scroll(width);
     frame.render_widget(block, area);
     frame.render_widget(
-        Paragraph::new(input.to_string()).scroll((0, scroll as u16)),
+        Paragraph::new(input.to_string()).scroll((0, clamp_scroll(scroll))),
         input_area,
     );
 
@@ -408,7 +408,7 @@ fn render_picker(frame: &mut Frame, area: Rect, picker: &TypePickerState) -> Opt
     let width = usize::from(chunks[0].width.max(1));
     let scroll = picker.query.visual_scroll(width);
     frame.render_widget(
-        Paragraph::new(picker.query.to_string()).scroll((0, scroll as u16)),
+        Paragraph::new(picker.query.to_string()).scroll((0, clamp_scroll(scroll))),
         chunks[0],
     );
 
@@ -460,6 +460,10 @@ fn focused_style(focused: bool) -> Style {
     } else {
         Style::default()
     }
+}
+
+fn clamp_scroll(scroll: usize) -> u16 {
+    scroll.min(usize::from(u16::MAX)) as u16
 }
 
 #[cfg(test)]

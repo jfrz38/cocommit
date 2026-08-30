@@ -101,3 +101,18 @@ fn renders_every_focus_with_long_unicode_input_and_error() {
         draw(&app, 100, 40);
     }
 }
+
+#[test]
+fn renders_maximum_length_unicode_input_without_overflowing_scroll_values() {
+    let mut app = App::new(false);
+    app.form.message = Input::new("界".repeat(crate::app::MAX_MESSAGE_LENGTH));
+    app.focus = Focus::Message;
+
+    draw(&app, 30, 8);
+    draw(&app, 100, 40);
+}
+
+#[test]
+fn clamps_scroll_values_that_exceed_the_terminal_coordinate_range() {
+    assert_eq!(super::clamp_scroll(usize::MAX), u16::MAX);
+}

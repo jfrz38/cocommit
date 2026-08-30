@@ -207,6 +207,84 @@ fn paste_sanitizes_line_breaks_in_form_and_picker() {
 }
 
 #[test]
+fn input_rejects_control_characters_without_changing_the_field() {
+    let mut app = App::new(false);
+    focus(&mut app, Focus::Message);
+
+    app.handle(AppEvent::Edit(Edit::Insert('\u{1b}')));
+
+    assert!(app.form.message.to_string().is_empty());
+    assert_eq!(
+        app.validation_message(),
+        Some("Control characters are not supported")
+    );
+    app.handle(AppEvent::Paste("valid\0paste".to_owned()));
+    assert!(app.form.message.to_string().is_empty());
+    assert_eq!(
+        app.validation_message(),
+        Some("Paste contains unsupported control characters or is too large")
+    );
+}
+
+#[test]
+fn picker_clears_rejected_input_feedback_when_cancelled() {
+    let mut app = App::new(false);
+    app.validation_error = Some(ValidationError {
+        field: DraftField::Message,
+        kind: ValidationErrorKind::Required,
+    });
+    focus(&mut app, Focus::CommitType);
+    app.handle(AppEvent::Edit(Edit::Insert('\u{1b}')));
+    assert_eq!(
+        app.validation_message(),
+        Some("Control characters are not supported")
+    );
+
+    app.handle(AppEvent::Escape);
+
+    assert_eq!(app.validation_message(), Some("Message is required"));
+}
+
+#[test]
+fn input_enforces_field_and_paste_limits_without_partial_insertion() {
+    let mut app = App::new(false);
+    focus(&mut app, Focus::Issue);
+    app.handle(AppEvent::Paste("9".repeat(MAX_ISSUE_LENGTH)));
+    assert_eq!(app.form.issue.to_string(), "9".repeat(MAX_ISSUE_LENGTH));
+
+    app.handle(AppEvent::Edit(Edit::Insert('9')));
+    assert_eq!(app.form.issue.to_string(), "9".repeat(MAX_ISSUE_LENGTH));
+    assert_eq!(app.validation_message(), Some("Field is too long"));
+
+    focus(&mut app, Focus::Message);
+    app.handle(AppEvent::Paste("a".repeat(MAX_MESSAGE_LENGTH + 1)));
+    assert!(app.form.message.to_string().is_empty());
+    assert_eq!(
+        app.validation_message(),
+        Some("Paste exceeds the field limit")
+    );
+
+    app.handle(AppEvent::Paste("b".repeat(MAX_PASTE_LENGTH + 1)));
+    assert!(app.form.message.to_string().is_empty());
+    assert_eq!(
+        app.validation_message(),
+        Some("Paste contains unsupported control characters or is too large")
+    );
+}
+
+#[test]
+fn unicode_input_counts_characters_instead_of_bytes() {
+    let mut app = App::new(false);
+    focus(&mut app, Focus::Scope);
+    app.handle(AppEvent::Paste("界".repeat(MAX_SCOPE_LENGTH)));
+
+    assert_eq!(app.form.scope.to_string().chars().count(), MAX_SCOPE_LENGTH);
+    app.handle(AppEvent::Edit(Edit::Insert('界')));
+    assert_eq!(app.form.scope.to_string().chars().count(), MAX_SCOPE_LENGTH);
+    assert_eq!(app.validation_message(), Some("Field is too long"));
+}
+
+#[test]
 fn cancel_actions_cancel_from_both_modes() {
     let mut app = App::new(false);
     assert_eq!(app.handle(AppEvent::Escape), AppAction::Cancel);
