@@ -1,8 +1,12 @@
 //! Git command execution and preflight checks.
 
-use std::{path::Path, process::Command};
+use std::{
+    io,
+    path::Path,
+    process::{Command, Output},
+};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, anyhow, bail};
 
 /// Verifies that Git is available, the current directory is a work tree, and
 /// the index contains staged changes.
@@ -11,19 +15,24 @@ pub fn preflight(working_directory: &Path) -> Result<()> {
         .current_dir(working_directory)
         .args(["rev-parse", "--is-inside-work-tree"])
         .output()
-        .context("failed to run git rev-parse; ensure Git is installed and on PATH")?;
+        .map_err(|error| git_start_error("git rev-parse --is-inside-work-tree", error))?;
 
-    if !is_inside_work_tree(output.status.success(), &output.stdout) {
-        bail!("current directory is not inside a usable Git working tree");
+    if !output.status.success() {
+        return Err(git_failure("git rev-parse --is-inside-work-tree", &output));
+    }
+    if !is_inside_work_tree(true, &output.stdout) {
+        bail!(
+            "git rev-parse --is-inside-work-tree reported that the current directory is not inside a usable Git working tree"
+        );
     }
 
-    let status = Command::new("git")
+    let output = Command::new("git")
         .current_dir(working_directory)
         .args(["diff", "--cached", "--quiet"])
-        .status()
-        .context("failed to run git diff; ensure Git is installed and on PATH")?;
+        .output()
+        .map_err(|error| git_start_error("git diff --cached --quiet", error))?;
 
-    if !has_staged_changes(status.code())? {
+    if !has_staged_changes(output.status.code())? {
         bail!("no staged changes to commit");
     }
 
@@ -36,12 +45,31 @@ pub fn commit(working_directory: &Path, message: &str, sign: bool) -> Result<()>
         .current_dir(working_directory)
         .args(commit_arguments(message, sign))
         .status()
-        .context("failed to run git commit; ensure Git is installed and on PATH")?;
+        .map_err(|error| git_start_error("git commit", error))?;
 
     if status.success() {
         Ok(())
     } else {
         bail!("git commit failed with status {status}")
+    }
+}
+
+fn git_start_error(command: &str, error: io::Error) -> anyhow::Error {
+    if error.kind() == io::ErrorKind::NotFound {
+        anyhow!(
+            "Git executable was not found while running `{command}`; install Git and ensure it is on PATH"
+        )
+    } else {
+        anyhow!("failed to start `{command}`: {error}")
+    }
+}
+
+fn git_failure(command: &str, output: &Output) -> anyhow::Error {
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+    if stderr.is_empty() {
+        anyhow!("`{command}` failed with status {}", output.status)
+    } else {
+        anyhow!("`{command}` failed with status {}: {stderr}", output.status)
     }
 }
 

@@ -1,4 +1,6 @@
-use super::{commit_arguments, has_staged_changes, is_inside_work_tree};
+use std::io;
+
+use super::{commit_arguments, git_start_error, has_staged_changes, is_inside_work_tree};
 
 #[test]
 fn builds_unsigned_commit_arguments() {
@@ -54,4 +56,30 @@ fn rejects_preflight_termination_by_signal() {
     let error = has_staged_changes(None).expect_err("signal termination should fail preflight");
 
     assert!(error.to_string().contains("terminated by a signal"));
+}
+
+#[test]
+fn identifies_a_missing_git_executable() {
+    let error = git_start_error(
+        "git rev-parse --is-inside-work-tree",
+        io::Error::new(io::ErrorKind::NotFound, "not found"),
+    );
+
+    assert!(error.to_string().contains("Git executable was not found"));
+    assert!(
+        error
+            .to_string()
+            .contains("git rev-parse --is-inside-work-tree")
+    );
+}
+
+#[test]
+fn identifies_other_command_start_failures() {
+    let error = git_start_error(
+        "git diff --cached --quiet",
+        io::Error::new(io::ErrorKind::PermissionDenied, "access denied"),
+    );
+
+    assert!(error.to_string().contains("failed to start"));
+    assert!(error.to_string().contains("access denied"));
 }

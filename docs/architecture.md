@@ -16,9 +16,10 @@ Makefile
 .github/
   workflows/
     ci.yml
-src/
-  lib.rs
-  main.rs
+   src/
+   lib.rs
+   main.rs
+   cli.rs
   app.rs
   commit.rs
   config.rs
@@ -43,6 +44,7 @@ tests/
 | Module | Responsibility |
 |---|---|
 | `main.rs` | Orchestrates preflight, config loading, terminal lifecycle, TUI result, and final Git execution. |
+| `cli.rs` | Parses the small command-line contract and provides usage text without terminal or Git dependencies. |
 | `commit.rs` | Defines the commit draft, canonical rendering, and validation. Has no terminal or Git dependency. |
 | `config.rs` | Defines defaults, resolves the global path, reads and parses TOML. |
 | `git.rs` | Runs explicit Git commands, interprets exit statuses, and constructs `git commit` arguments. |
@@ -54,7 +56,7 @@ tests/
 Dependencies point inward:
 
 ```text
-main -> config, git, terminal, app, event, ui
+main -> cli, config, git, terminal, app, event, ui
 app -> commit
 event -> app
 ui -> app, commit
@@ -125,9 +127,11 @@ pub enum AppAction {
 ## Main flow
 
 ```text
-preflight Git -> load config -> initialize terminal -> run UI loop
+parse CLI -> verify interactive streams -> preflight Git -> load config -> initialize terminal -> run UI loop
     -> cancel: restore terminal and exit successfully
     -> submit: validate -> restore terminal -> git commit -> exit with Git status
 ```
 
 The terminal is restored before invoking Git. This is essential for hooks, signing prompts, pinentry, and normal Git output.
+
+Help and version exit before the interactive-stream and Git checks. Usage errors exit before terminal initialization. The executable maps usage errors to exit code `2`, while operational failures use `1` and successful cancellation uses `0`.

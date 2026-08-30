@@ -1,8 +1,8 @@
 //! Terminal lifecycle management.
 
-use std::io;
+use std::io::{self, IsTerminal};
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use crossterm::{
     cursor::{Hide, Show},
     event::{DisableBracketedPaste, EnableBracketedPaste, read},
@@ -21,6 +21,20 @@ use crate::{
 pub enum TerminalResult {
     Cancelled,
     Submitted { draft: CommitDraft, sign: bool },
+}
+
+/// Rejects redirected standard streams before changing terminal state.
+pub fn ensure_standard_streams_are_interactive() -> Result<()> {
+    ensure_interactive(io::stdin().is_terminal(), io::stdout().is_terminal())
+}
+
+fn ensure_interactive(stdin_is_terminal: bool, stdout_is_terminal: bool) -> Result<()> {
+    match (stdin_is_terminal, stdout_is_terminal) {
+        (true, true) => Ok(()),
+        (false, false) => bail!("standard input and standard output must be interactive terminals"),
+        (false, true) => bail!("standard input must be an interactive terminal"),
+        (true, false) => bail!("standard output must be an interactive terminal"),
+    }
 }
 
 /// Owns the terminal modes that must be restored before returning to Git.
@@ -154,3 +168,6 @@ pub fn run(app: &mut App) -> Result<TerminalResult> {
         ))),
     }
 }
+
+#[cfg(test)]
+mod tests;

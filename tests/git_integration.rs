@@ -58,6 +58,56 @@ fn creates_an_unsigned_commit_in_a_temporary_repository() {
     assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), message);
 }
 
+#[test]
+fn preflight_accepts_a_staged_repository_and_rejects_missing_staged_changes() {
+    if !require_git() {
+        return;
+    }
+    let repository = tempdir().expect("temporary repository should be created");
+    run_git(repository.path(), ["init"]);
+
+    let error = cocommit::git::preflight(repository.path())
+        .expect_err("an empty index should fail preflight");
+    assert!(error.to_string().contains("no staged changes"));
+
+    fs::write(
+        repository.path().join("staged.txt"),
+        "integration coverage\n",
+    )
+    .expect("staged file should be written");
+    run_git(repository.path(), ["add", "staged.txt"]);
+    cocommit::git::preflight(repository.path()).expect("a staged repository should pass preflight");
+}
+
+#[test]
+fn preflight_reports_the_failing_git_command_outside_a_repository() {
+    if !require_git() {
+        return;
+    }
+    let directory = tempdir().expect("temporary directory should be created");
+
+    let error = cocommit::git::preflight(directory.path())
+        .expect_err("a non-repository should fail preflight");
+
+    assert!(
+        error
+            .to_string()
+            .contains("git rev-parse --is-inside-work-tree")
+    );
+}
+
+fn require_git() -> bool {
+    let Ok(version) = Command::new("git").arg("--version").status() else {
+        eprintln!("skipping Git integration test because git --version could not run");
+        return false;
+    };
+    if !version.success() {
+        eprintln!("skipping Git integration test because git --version failed with {version}");
+        return false;
+    }
+    true
+}
+
 fn run_git<const N: usize>(repository: &Path, arguments: [&str; N]) {
     let status = Command::new("git")
         .current_dir(repository)

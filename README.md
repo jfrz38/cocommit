@@ -64,6 +64,23 @@ The type picker also accepts custom types. Scope, breaking marker, issue number,
 
 Optional parts are omitted when unset. The message is required, and all text fields are one line. The preview updates after every edit.
 
+### Command-line options
+
+```text
+cocommit --help
+cocommit --version
+```
+
+`-h` and `-V` are equivalent short options. Any other argument is rejected with exit code `2`; the interactive command accepts no arguments. Help and version work outside a repository and with redirected output.
+
+The interactive command requires both standard input and standard output to be terminals. This prevents terminal control sequences from being emitted to a pipe or redirected file.
+
+| Exit code | Meaning |
+|---|---|
+| `0` | Help or version displayed, form cancelled, or commit succeeded. |
+| `1` | Configuration, preflight, terminal, or Git commit failure. |
+| `2` | Invalid command-line usage. |
+
 ## Validation
 
 All text fields are trimmed before validation and rendering. The type is required and cannot contain whitespace, `(`, `)`, `!`, or `:`. Scope cannot contain parentheses, and a non-empty issue must be a decimal integer. The message must be present and one line, but cocommit does not impose arbitrary length, capitalization, punctuation, or tense rules.
@@ -111,6 +128,13 @@ Missing configuration, or an unavailable platform configuration directory, uses 
 Before opening the form, cocommit verifies that Git is available, the current directory is inside a usable working tree, and staged changes exist. This works from subdirectories and linked worktrees. Git remains authoritative after that check, so a changed index can still cause the final commit to fail.
 
 After a valid submission, cocommit restores the terminal and runs `git commit` with inherited standard streams. This preserves normal Git output, hooks, credentials, signing prompts, and pinentry behavior. Commit messages are passed directly to Git without shell interpretation. A hook or signing failure is therefore shown directly by Git and returns a failure from cocommit. Cancelling restores the terminal and exits successfully without invoking Git.
+
+## Troubleshooting
+
+- `Git executable was not found`: install Git and make sure `git` is on `PATH` in the terminal where you run cocommit.
+- A preflight error names the failing Git command and includes Git's stderr. Follow that output for `safe.directory`, permission, repository, or index problems.
+- `standard input` or `standard output must be an interactive terminal`: run cocommit directly in a terminal instead of through a pipe, redirection, or non-interactive task runner. `--help` and `--version` remain usable in those contexts.
+- If the terminal looks corrupted after an abnormal termination, run `reset` on Unix or open a new terminal session. Supported signal and panic restoration are strengthened in the next planned iteration.
 
 ## v1 Limitations
 

@@ -46,6 +46,12 @@ Keep command construction observable without running a commit. Test:
 - Preflight exit code `0` means no staged changes.
 - Preflight exit code `1` means staged changes exist.
 - Other statuses are errors.
+- Missing Git executable diagnostics identify Git and the command that could not start.
+- Failed preflight diagnostics retain the command and Git stderr.
+
+### CLI contract
+
+Test the parser directly for no arguments, both help aliases, both version aliases, unknown arguments, and extra arguments. Black-box binary tests must verify that help and version work outside a repository with captured output, unknown arguments return exit code `2` without terminal sequences, and redirected standard streams return exit code `1` before Git or terminal initialization.
 
 ### App state and UI smoke tests
 
@@ -74,6 +80,8 @@ An integration test uses `tempfile` and the real Git CLI:
 7. Assert the subject equals the expected Conventional Commit message.
 
 No signing or hook behavior is tested automatically because those depend on host configuration. The product design intentionally delegates those workflows to Git.
+
+The integration suite also covers preflight in an empty temporary repository, a staged repository, and a directory outside a repository.
 
 ## Quality commands
 
