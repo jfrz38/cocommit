@@ -178,7 +178,7 @@ fn install_unix_signal_handlers() -> Result<()> {
         std::thread::Builder::new()
             .name("cocommit-terminal-signals".to_owned())
             .spawn(move || {
-                for signal in signals.forever() {
+                if let Some(signal) = signals.forever().next() {
                     let _ = restore_terminal_state();
                     std::process::exit(128 + signal);
                 }
