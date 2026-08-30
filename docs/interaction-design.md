@@ -91,4 +91,6 @@ On cancel, restore the terminal and return success without invoking Git. On vali
 - Process only Crossterm `KeyEventKind::Press` to avoid duplicate actions on platforms that emit release events.
 - Handle `Resize` by redrawing.
 - Treat paste explicitly and remove or reject line breaks before they reach one-line fields.
+- Convert contiguous pasted line breaks to one space. Reject NUL, escape, and other control characters, and keep the current value unchanged when a field or paste limit is exceeded.
+- Limit type to 64 characters, scope to 128, message to 512, issue to 20, and a single paste to 4096 characters. Show concise feedback in Error for rejected input.
 - Ignore focus and mouse events in v1.

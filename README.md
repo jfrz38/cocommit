@@ -83,9 +83,9 @@ The interactive command requires both standard input and standard output to be t
 
 ## Validation
 
-All text fields are trimmed before validation and rendering. The type is required and cannot contain whitespace, `(`, `)`, `!`, or `:`. Scope cannot contain parentheses, and a non-empty issue must be a decimal integer. The message must be present and one line, but cocommit does not impose arbitrary length, capitalization, punctuation, or tense rules.
+All text fields are trimmed before validation and rendering. The type is required and cannot contain whitespace, `(`, `)`, `!`, or `:`. Scope cannot contain parentheses, and a non-empty issue must be a decimal integer. The message must be present and one line, but cocommit does not impose capitalization, punctuation, or tense rules. Interactive limits are 64 characters for type, 128 for scope, 512 for message, 20 for issue, and 4096 for a single paste.
 
-Invalid submission keeps the form open, displays a field-specific error, and focuses the first invalid field. Pasted line breaks are converted to spaces.
+Invalid submission keeps the form open, displays a field-specific error, and focuses the first invalid field. Pasted line breaks are converted to spaces. NUL, escape, and other control characters are rejected; rejected input leaves the field unchanged.
 
 ## Keyboard Controls
 
@@ -134,7 +134,8 @@ After a valid submission, cocommit restores the terminal and runs `git commit` w
 - `Git executable was not found`: install Git and make sure `git` is on `PATH` in the terminal where you run cocommit.
 - A preflight error names the failing Git command and includes Git's stderr. Follow that output for `safe.directory`, permission, repository, or index problems.
 - `standard input` or `standard output must be an interactive terminal`: run cocommit directly in a terminal instead of through a pipe, redirection, or non-interactive task runner. `--help` and `--version` remain usable in those contexts.
-- If the terminal looks corrupted after an abnormal termination, run `reset` on Unix or open a new terminal session. Supported signal and panic restoration are strengthened in the next planned iteration.
+- cocommit restores its terminal modes after normal completion, panic, and on Unix `SIGHUP`, `SIGINT`, `SIGQUIT`, or `SIGTERM`. If the terminal is still corrupted, run `reset` on Unix or open a new terminal session.
+- Job-control suspension is not supported while the form is open. Cancel cocommit before suspending it; resuming an externally suspended process is not guaranteed to restore the form state.
 
 ## v1 Limitations
 

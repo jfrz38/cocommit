@@ -7,6 +7,11 @@ use crate::commit::{CommitDraft, DraftField, ValidationError, ValidationErrorKin
 pub const STANDARD_TYPES: [&str; 11] = [
     "feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert",
 ];
+pub const MAX_TYPE_LENGTH: usize = 64;
+pub const MAX_SCOPE_LENGTH: usize = 128;
+pub const MAX_MESSAGE_LENGTH: usize = 512;
+pub const MAX_ISSUE_LENGTH: usize = 20;
+pub const MAX_PASTE_LENGTH: usize = 4096;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Focus {
@@ -117,6 +122,7 @@ pub struct App {
     pub mode: Mode,
     pub sign: bool,
     pub validation_error: Option<ValidationError>,
+    pub input_error: Option<&'static str>,
 }
 
 impl App {
@@ -133,6 +139,7 @@ impl App {
             mode: Mode::Form,
             sign,
             validation_error: None,
+            input_error: None,
         }
     }
 
@@ -157,7 +164,8 @@ impl App {
 
     /// Returns a concise message suitable for the form status area.
     pub fn validation_message(&self) -> Option<&'static str> {
-        self.validation_error
+        self.input_error.or(self
+            .validation_error
             .map(|error| match (error.field, error.kind) {
                 (DraftField::CommitType, ValidationErrorKind::Required) => "Type is required",
                 (DraftField::CommitType, ValidationErrorKind::MustBeSingleLine) => {
@@ -184,7 +192,7 @@ impl App {
                 }
                 (DraftField::Issue, ValidationErrorKind::IntegerOutOfRange) => "Issue is too large",
                 _ => "Invalid value",
-            })
+            }))
     }
 
     pub fn handle(&mut self, event: AppEvent) -> AppAction {
@@ -262,7 +270,10 @@ impl App {
 
     fn handle_picker(&mut self, event: AppEvent) -> AppAction {
         match event {
-            AppEvent::Escape => self.mode = Mode::Form,
+            AppEvent::Escape => {
+                self.mode = Mode::Form;
+                self.input_error = None;
+            }
             AppEvent::Cancel => return AppAction::Cancel,
             AppEvent::Enter => self.select_picker_choice(),
             AppEvent::Up => self.move_highlight(-1),
@@ -322,13 +333,38 @@ impl App {
             _ => None,
         };
         if let Some(input) = input {
+            if let Edit::Insert(character) = edit {
+                if character.is_control() {
+                    self.input_error = Some("Control characters are not supported");
+                    return;
+                }
+                if input.to_string().chars().count() >= field_limit(self.focus) {
+                    self.input_error = Some("Field is too long");
+                    return;
+                }
+            }
             input.handle(edit.request());
             self.clear_validation_error();
         }
     }
 
     fn paste_form(&mut self, value: &str) {
-        for character in sanitize_paste(value).chars() {
+        let Ok(value) = sanitize_paste(value) else {
+            self.input_error =
+                Some("Paste contains unsupported control characters or is too large");
+            return;
+        };
+        let existing_length = match self.focus {
+            Focus::Scope => self.form.scope.to_string().chars().count(),
+            Focus::Message => self.form.message.to_string().chars().count(),
+            Focus::Issue => self.form.issue.to_string().chars().count(),
+            _ => return,
+        };
+        if existing_length + value.chars().count() > field_limit(self.focus) {
+            self.input_error = Some("Paste exceeds the field limit");
+            return;
+        }
+        for character in value.chars() {
             self.edit_form(Edit::Insert(character));
         }
     }
@@ -337,12 +373,36 @@ impl App {
         let Mode::TypePicker(picker) = &mut self.mode else {
             return;
         };
+        if let Edit::Insert(character) = edit {
+            if character.is_control() {
+                self.input_error = Some("Control characters are not supported");
+                return;
+            }
+            if picker.query.to_string().chars().count() >= MAX_TYPE_LENGTH {
+                self.input_error = Some("Field is too long");
+                return;
+            }
+        }
         picker.query.handle(edit.request());
         picker.highlighted = 0;
+        self.input_error = None;
     }
 
     fn paste_picker(&mut self, value: &str) {
-        for character in sanitize_paste(value).chars() {
+        let Ok(value) = sanitize_paste(value) else {
+            self.input_error =
+                Some("Paste contains unsupported control characters or is too large");
+            return;
+        };
+        let current_length = match &self.mode {
+            Mode::TypePicker(picker) => picker.query.to_string().chars().count(),
+            _ => return,
+        };
+        if current_length + value.chars().count() > MAX_TYPE_LENGTH {
+            self.input_error = Some("Paste exceeds the field limit");
+            return;
+        }
+        for character in value.chars() {
             self.edit_picker(Edit::Insert(character));
         }
     }
@@ -361,6 +421,7 @@ impl App {
 
     fn clear_validation_error(&mut self) {
         self.validation_error = None;
+        self.input_error = None;
     }
 }
 
@@ -411,7 +472,20 @@ fn focus_for(field: DraftField) -> Focus {
     }
 }
 
-fn sanitize_paste(value: &str) -> String {
+fn field_limit(focus: Focus) -> usize {
+    match focus {
+        Focus::Scope => MAX_SCOPE_LENGTH,
+        Focus::Message => MAX_MESSAGE_LENGTH,
+        Focus::Issue => MAX_ISSUE_LENGTH,
+        Focus::CommitType => MAX_TYPE_LENGTH,
+        Focus::Breaking | Focus::Sign | Focus::Submit => 0,
+    }
+}
+
+fn sanitize_paste(value: &str) -> Result<String, ()> {
+    if value.chars().count() > MAX_PASTE_LENGTH {
+        return Err(());
+    }
     let mut sanitized = String::new();
     let mut previous_was_line_break = false;
     for character in value.chars() {
@@ -420,12 +494,14 @@ fn sanitize_paste(value: &str) -> String {
                 sanitized.push(' ');
             }
             previous_was_line_break = true;
+        } else if character.is_control() {
+            return Err(());
         } else {
             sanitized.push(character);
             previous_was_line_break = false;
         }
     }
-    sanitized
+    Ok(sanitized)
 }
 
 #[cfg(test)]

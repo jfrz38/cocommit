@@ -53,6 +53,8 @@ Keep command construction observable without running a commit. Test:
 
 Test the parser directly for no arguments, both help aliases, both version aliases, unknown arguments, and extra arguments. Black-box binary tests must verify that help and version work outside a repository with captured output, unknown arguments return exit code `2` without terminal sequences, and redirected standard streams return exit code `1` before Git or terminal initialization.
 
+On Unix, `tests/terminal_pty.rs` runs the compiled binary in a pseudo-terminal. It covers normal cancellation and verifies that `SIGTERM` restores alternate screen, bracketed paste, and cursor sequences before exiting. Redirected-stream coverage remains the deterministic initialization-failure boundary on every platform.
+
 ### App state and UI smoke tests
 
 Test state transitions directly:
@@ -64,6 +66,8 @@ Test state transitions directly:
 - Filtering selects a standard type or custom query.
 - Submit validation focuses the first invalid field.
 - Cancel produces `AppAction::Cancel`.
+- NUL, escape, and other control characters are rejected from edits and paste without changing the field.
+- Field and paste limits reject the whole input without partial insertion, including Unicode input counted as characters rather than bytes.
 
 Use `ratatui::backend::TestBackend` for narrow render smoke tests: normal terminal, compact terminal with vertical scroll, too-small terminal, form mode, and picker mode. Assert that rendering does not panic; do not snapshot the entire screen.
 
@@ -96,7 +100,7 @@ cargo build --locked --all-targets --all-features
 
 GitHub Actions runs `make check` on Ubuntu for pull requests to `develop` and `main`, every Monday at 06:00 UTC, and on manual dispatch. Windows and macOS run `cargo check --workspace --all-targets --all-features --locked` for pull requests to `main`, scheduled runs, and manual dispatch; this preserves portability coverage without depending on GNU Make.
 
-Before release, run manual smoke tests on a real repository for cancel, valid unsigned commit, explicit signing, Git hook rejection, no staged changes, non-repository invocation, small terminal, and pasted text.
+Before release, run manual smoke tests on a real repository for cancel, valid unsigned commit, explicit signing, Git hook rejection, no staged changes, non-repository invocation, small terminal, bounded pasted text, and forced termination. On Unix, verify restoration after a supported external termination signal; on all platforms, verify cancellation with `Ctrl+C` through the event loop.
 
 ## Release workflow rehearsal
 

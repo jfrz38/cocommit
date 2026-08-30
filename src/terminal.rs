@@ -1,6 +1,13 @@
 //! Terminal lifecycle management.
 
-use std::io::{self, IsTerminal};
+use std::{
+    io::{self, IsTerminal},
+    panic,
+    sync::{
+        Once,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 use anyhow::{Context, Result, anyhow, bail};
 use crossterm::{
@@ -10,6 +17,14 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
+
+#[cfg(unix)]
+use signal_hook::{
+    consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM},
+    iterator::Signals,
+};
+#[cfg(unix)]
+use std::sync::OnceLock;
 
 use crate::{
     app::{App, AppAction},
@@ -22,6 +37,12 @@ pub enum TerminalResult {
     Cancelled,
     Submitted { draft: CommitDraft, sign: bool },
 }
+
+static TERMINAL_STATE_ACTIVE: AtomicBool = AtomicBool::new(false);
+static PANIC_HOOK: Once = Once::new();
+
+#[cfg(unix)]
+static SIGNAL_HANDLERS: OnceLock<Result<(), String>> = OnceLock::new();
 
 /// Rejects redirected standard streams before changing terminal state.
 pub fn ensure_standard_streams_are_interactive() -> Result<()> {
@@ -40,40 +61,29 @@ fn ensure_interactive(stdin_is_terminal: bool, stdout_is_terminal: bool) -> Resu
 /// Owns the terminal modes that must be restored before returning to Git.
 pub struct TerminalSession {
     terminal: Terminal<CrosstermBackend<io::Stdout>>,
-    raw_mode: bool,
-    alternate_screen: bool,
-    bracketed_paste: bool,
-    cursor_hidden: bool,
 }
 
 impl TerminalSession {
     /// Initializes Ratatui after placing the terminal in its interactive mode.
     pub fn new() -> Result<Self> {
-        enable_raw_mode().context("failed to enable terminal raw mode")?;
+        install_restoration_handlers()?;
+        // Mark recovery active first so a signal during raw-mode activation is still restored.
+        TERMINAL_STATE_ACTIVE.store(true, Ordering::Release);
+        if let Err(error) = enable_raw_mode() {
+            let _ = restore_terminal_state();
+            return Err(error).context("failed to enable terminal raw mode");
+        }
         let mut stdout = io::stdout();
         if let Err(error) = execute!(stdout, EnterAlternateScreen, EnableBracketedPaste, Hide) {
-            let _ = execute!(stdout, Show, DisableBracketedPaste, LeaveAlternateScreen);
-            let _ = disable_raw_mode();
+            let _ = restore_terminal_state();
             return Err(error).context("failed to initialize terminal screen");
         }
 
         let backend = CrosstermBackend::new(stdout);
         match Terminal::new(backend) {
-            Ok(terminal) => Ok(Self {
-                terminal,
-                raw_mode: true,
-                alternate_screen: true,
-                bracketed_paste: true,
-                cursor_hidden: true,
-            }),
+            Ok(terminal) => Ok(Self { terminal }),
             Err(error) => {
-                let _ = execute!(
-                    io::stdout(),
-                    Show,
-                    DisableBracketedPaste,
-                    LeaveAlternateScreen
-                );
-                let _ = disable_raw_mode();
+                let _ = restore_terminal_state();
                 Err(error).context("failed to create terminal renderer")
             }
         }
@@ -113,38 +123,73 @@ impl TerminalSession {
 
     /// Attempts every cleanup operation, retaining the first failure for the caller.
     pub fn restore(&mut self) -> Result<()> {
-        let mut failure = None;
-        let backend = self.terminal.backend_mut();
-
-        if self.cursor_hidden {
-            if let Err(error) = execute!(backend, Show) {
-                failure.get_or_insert(error);
-            }
-            self.cursor_hidden = false;
-        }
-        if self.bracketed_paste {
-            if let Err(error) = execute!(backend, DisableBracketedPaste) {
-                failure.get_or_insert(error);
-            }
-            self.bracketed_paste = false;
-        }
-        if self.alternate_screen {
-            if let Err(error) = execute!(backend, LeaveAlternateScreen) {
-                failure.get_or_insert(error);
-            }
-            self.alternate_screen = false;
-        }
-        if self.raw_mode {
-            if let Err(error) = disable_raw_mode() {
-                failure.get_or_insert(error);
-            }
-            self.raw_mode = false;
-        }
-
-        failure.map_or(Ok(()), |error| {
-            Err(error).context("failed to restore terminal")
-        })
+        restore_terminal_state()
     }
+}
+
+/// Restores every terminal mode once, including after partial initialization.
+fn restore_terminal_state() -> Result<()> {
+    if !TERMINAL_STATE_ACTIVE.swap(false, Ordering::AcqRel) {
+        return Ok(());
+    }
+
+    let mut failure = None;
+    let mut stdout = io::stdout();
+    if let Err(error) = execute!(stdout, Show) {
+        failure.get_or_insert(error);
+    }
+    if let Err(error) = execute!(stdout, DisableBracketedPaste) {
+        failure.get_or_insert(error);
+    }
+    if let Err(error) = execute!(stdout, LeaveAlternateScreen) {
+        failure.get_or_insert(error);
+    }
+    if let Err(error) = disable_raw_mode() {
+        failure.get_or_insert(error);
+    }
+
+    failure.map_or(Ok(()), |error| {
+        Err(error).context("failed to restore terminal")
+    })
+}
+
+fn install_restoration_handlers() -> Result<()> {
+    install_panic_hook();
+    #[cfg(unix)]
+    install_unix_signal_handlers()?;
+    Ok(())
+}
+
+fn install_panic_hook() {
+    PANIC_HOOK.call_once(|| {
+        let previous_hook = panic::take_hook();
+        panic::set_hook(Box::new(move |panic_info| {
+            let _ = restore_terminal_state();
+            previous_hook(panic_info);
+        }));
+    });
+}
+
+#[cfg(unix)]
+fn install_unix_signal_handlers() -> Result<()> {
+    let installation = SIGNAL_HANDLERS.get_or_init(|| {
+        let mut signals =
+            Signals::new([SIGHUP, SIGINT, SIGQUIT, SIGTERM]).map_err(|error| error.to_string())?;
+        std::thread::Builder::new()
+            .name("cocommit-terminal-signals".to_owned())
+            .spawn(move || {
+                if let Some(signal) = signals.forever().next() {
+                    let _ = restore_terminal_state();
+                    std::process::exit(128 + signal);
+                }
+            })
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    });
+    installation
+        .as_ref()
+        .map_err(|error| anyhow!(error.clone()))
+        .copied()
 }
 
 impl Drop for TerminalSession {
