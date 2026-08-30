@@ -1,6 +1,7 @@
 //! Git command execution and preflight checks.
 
 use std::{
+    ffi::OsString,
     fmt::Write,
     io,
     path::Path,
@@ -48,9 +49,29 @@ pub struct StagedFile {
     pub kind: StagedChangeKind,
     pub path: String,
     pub previous_path: Option<String>,
+    git_paths: Vec<OsString>,
 }
 
 impl StagedFile {
+    pub fn for_display(
+        kind: StagedChangeKind,
+        path: impl Into<String>,
+        previous_path: Option<String>,
+    ) -> Self {
+        let path = path.into();
+        let mut git_paths = previous_path
+            .as_ref()
+            .map(|previous_path| vec![OsString::from(previous_path)])
+            .unwrap_or_default();
+        git_paths.push(OsString::from(&path));
+        Self {
+            kind,
+            path,
+            previous_path,
+            git_paths,
+        }
+    }
+
     pub fn label(&self) -> String {
         match &self.previous_path {
             Some(previous_path) => {
@@ -191,6 +212,22 @@ pub fn commit(working_directory: &Path, message: &str, sign: bool) -> Result<()>
     }
 }
 
+/// Removes selected files from the index without changing the working tree.
+pub fn unstage(working_directory: &Path, files: &[StagedFile]) -> Result<()> {
+    let has_head = has_head(working_directory)?;
+    let arguments = unstage_arguments(files, has_head);
+    let output = Command::new("git")
+        .current_dir(working_directory)
+        .args(arguments)
+        .output()
+        .map_err(|error| git_start_error("git unstage selected file", error))?;
+    if !output.status.success() {
+        return Err(git_failure("git unstage selected file", &output));
+    }
+
+    Ok(())
+}
+
 fn git_start_error(command: &str, error: io::Error) -> anyhow::Error {
     if error.kind() == io::ErrorKind::NotFound {
         anyhow!(
@@ -216,6 +253,39 @@ fn commit_arguments(message: &str, sign: bool) -> Vec<String> {
         arguments.push("-S".to_owned());
     }
     arguments.extend(["-m".to_owned(), message.to_owned()]);
+    arguments
+}
+
+fn has_head(working_directory: &Path) -> Result<bool> {
+    let output = Command::new("git")
+        .current_dir(working_directory)
+        .args(["rev-parse", "--verify", "--quiet", "HEAD"])
+        .output()
+        .map_err(|error| git_start_error("git rev-parse --verify --quiet HEAD", error))?;
+    match output.status.code() {
+        Some(0) => Ok(true),
+        Some(1) => Ok(false),
+        Some(code) => bail!("git rev-parse --verify --quiet HEAD failed with exit code {code}"),
+        None => bail!("git rev-parse --verify --quiet HEAD was terminated by a signal"),
+    }
+}
+
+fn unstage_arguments(files: &[StagedFile], has_head: bool) -> Vec<OsString> {
+    let mut arguments = if has_head {
+        vec![
+            OsString::from("--literal-pathspecs"),
+            OsString::from("restore"),
+            OsString::from("--staged"),
+        ]
+    } else {
+        vec![
+            OsString::from("--literal-pathspecs"),
+            OsString::from("update-index"),
+            OsString::from("--force-remove"),
+        ]
+    };
+    arguments.push(OsString::from("--"));
+    arguments.extend(files.iter().flat_map(|file| file.git_paths.iter().cloned()));
     arguments
 }
 
@@ -245,18 +315,27 @@ fn parse_name_status(output: &[u8]) -> Result<Vec<StagedFile>> {
         let first_path = fields
             .next()
             .context("Git returned a staged change without a path")?;
-        let (previous_path, path) = if matches!(kind, StagedChangeKind::Renamed) {
+        let (previous_path, path, git_paths) = if matches!(kind, StagedChangeKind::Renamed) {
             let path = fields
                 .next()
                 .context("Git returned a staged rename without a destination path")?;
-            (Some(display_path(first_path)), display_path(path))
+            (
+                Some(display_path(first_path)),
+                display_path(path),
+                vec![path_from_git(first_path), path_from_git(path)],
+            )
         } else {
-            (None, display_path(first_path))
+            (
+                None,
+                display_path(first_path),
+                vec![path_from_git(first_path)],
+            )
         };
         files.push(StagedFile {
             kind,
             path,
             previous_path,
+            git_paths,
         });
     }
 
@@ -327,6 +406,18 @@ fn display_path(path: &[u8]) -> String {
         }
     }
     displayed
+}
+
+#[cfg(unix)]
+fn path_from_git(path: &[u8]) -> OsString {
+    use std::os::unix::ffi::OsStringExt;
+
+    OsString::from_vec(path.to_vec())
+}
+
+#[cfg(not(unix))]
+fn path_from_git(path: &[u8]) -> OsString {
+    OsString::from(String::from_utf8_lossy(path).into_owned())
 }
 
 #[cfg(test)]

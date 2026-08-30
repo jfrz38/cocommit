@@ -39,7 +39,14 @@ fn run() -> Result<()> {
     app.set_staged_changes(staged_changes);
     match terminal::run(&mut app)? {
         terminal::TerminalResult::Cancelled => {}
-        terminal::TerminalResult::Submitted { draft, sign } => {
+        terminal::TerminalResult::Submitted {
+            draft,
+            sign,
+            excluded_files,
+        } => {
+            if !excluded_files.is_empty() {
+                git::unstage(&working_directory, &excluded_files)?;
+            }
             git::commit(&working_directory, &draft.render_message(), sign)?;
         }
     }

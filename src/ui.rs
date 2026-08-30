@@ -13,8 +13,10 @@ use crate::app::{App, Focus, Mode, TypeChoice, TypePickerState};
 
 const MIN_WIDTH: u16 = 30;
 const MIN_HEIGHT: u16 = 8;
-const EXPANDED_WIDTH: u16 = 60;
-const EXPANDED_HEIGHT: u16 = 40;
+const EXPANDED_WIDTH: u16 = 50;
+const EXPANDED_HEIGHT: u16 = 30;
+const EXPANDED_HEIGHT_WITH_STATUS: u16 = 33;
+const COMPACT_FORM_ROWS: u16 = 8;
 const FOOTER: &str = "F1 Help  Up/Down Navigate  Space Toggle  Ctrl+Enter Commit  Esc Cancel";
 
 /// Draws the complete application state.
@@ -25,7 +27,12 @@ pub fn render(frame: &mut Frame, app: &App) {
         return;
     }
 
-    if area.width >= EXPANDED_WIDTH && area.height >= EXPANDED_HEIGHT {
+    let expanded_height = if app.status_message().is_some() {
+        EXPANDED_HEIGHT_WITH_STATUS
+    } else {
+        EXPANDED_HEIGHT
+    };
+    if area.width >= EXPANDED_WIDTH && area.height >= expanded_height {
         render_expanded(frame, app, area);
     } else {
         render_compact(frame, app, area);
@@ -37,6 +44,10 @@ fn render_expanded(frame: &mut Frame, app: &App, area: Rect) {
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
 
+    let staged_height = inner
+        .height
+        .saturating_sub(25 + 3 * u16::from(app.status_message().is_some()))
+        .clamp(3, 9);
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -46,14 +57,10 @@ fn render_expanded(frame: &mut Frame, app: &App, area: Rect) {
             Constraint::Length(3),
             Constraint::Length(3),
             Constraint::Length(3),
-            Constraint::Length(9),
+            Constraint::Length(staged_height),
             Constraint::Length(3),
             Constraint::Length(3),
-            Constraint::Length(if app.validation_message().is_some() {
-                3
-            } else {
-                0
-            }),
+            Constraint::Length(if app.status_message().is_some() { 3 } else { 0 }),
             Constraint::Min(1),
         ])
         .split(inner);
@@ -104,8 +111,8 @@ fn render_expanded(frame: &mut Frame, app: &App, area: Rect) {
     render_staged_changes(frame, rows[6], app);
     render_preview(frame, rows[7], &app.preview());
     render_submit_row(frame, rows[8], app.focus == Focus::Submit);
-    if let Some(status) = app.validation_message() {
-        render_status(frame, rows[9], status);
+    if let Some(status) = app.status_message() {
+        render_status(frame, rows[9], status, app.status_is_error());
     }
     render_footer(frame, rows[10]);
 
@@ -137,12 +144,12 @@ fn render_compact(frame: &mut Frame, app: &App, area: Rect) {
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
 
-    let status_height = u16::from(app.validation_message().is_some());
+    let status_height = u16::from(app.status_message().is_some());
     let preview_height = 1;
     let form_height = inner
         .height
         .saturating_sub(preview_height + status_height + 1)
-        .max(1);
+        .clamp(1, COMPACT_FORM_ROWS);
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -171,8 +178,8 @@ fn render_compact(frame: &mut Frame, app: &App, area: Rect) {
     );
     if status_height > 0 {
         frame.render_widget(
-            Paragraph::new(app.validation_message().unwrap_or(""))
-                .style(Style::default().fg(Color::Red)),
+            Paragraph::new(app.status_message().unwrap_or(""))
+                .style(status_style(app.status_is_error())),
             rows[2],
         );
     }
@@ -233,14 +240,22 @@ fn render_compact_row(frame: &mut Frame, area: Rect, app: &App, index: usize) ->
         _ => return None,
     };
     let style = focused_style(focused);
+    let staged_position = if app.staged_changes.files.is_empty() {
+        0
+    } else {
+        app.staged_selected.min(app.staged_changes.files.len() - 1) + 1
+    };
     let content = match toggle {
         Some(value) => format!("{label:<10} [{}]", if value { "x" } else { " " }),
         None if index == 7 => "[ Commit ]".to_owned(),
         None if index == 6 => format!(
-            "{label:<10} {} files  +{} -{}",
+            "{label} {}/{} +{} -{} #{}/{}",
+            app.included_staged_count(),
             app.staged_changes.files.len(),
             app.staged_changes.insertions,
             app.staged_changes.deletions,
+            staged_position,
+            app.staged_changes.files.len(),
         ),
         None => format!("{label:<10}"),
     };
@@ -353,13 +368,14 @@ fn render_staged_changes(frame: &mut Frame, area: Rect, app: &App) {
     let focused = app.focus == Focus::StagedChanges && matches!(app.mode, Mode::Form);
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(" Staged changes (snapshot) ")
+        .title(" Staged changes ")
         .border_style(focused_style(focused));
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
     let summary = format!(
-        "{} files  {}  +{} -{}{}",
+        "{}/{} included  {}  +{} -{}{}",
+        app.included_staged_count(),
         app.staged_changes.files.len(),
         app.staged_changes.status_summary(),
         app.staged_changes.insertions,
@@ -380,15 +396,30 @@ fn render_staged_changes(frame: &mut Frame, area: Rect, app: &App) {
     if list_height == 0 {
         return;
     }
-    let max_scroll = app.staged_changes.files.len().saturating_sub(list_height);
-    let scroll = app.staged_scroll.min(max_scroll);
+    let selected = app
+        .staged_selected
+        .min(app.staged_changes.files.len().saturating_sub(1));
+    let scroll = selected.saturating_sub(list_height.saturating_sub(1));
     let items = app
         .staged_changes
         .files
         .iter()
         .skip(scroll)
         .take(list_height)
-        .map(|file| ListItem::new(file.label()))
+        .enumerate()
+        .map(|(index, file)| {
+            let file_index = scroll + index;
+            ListItem::new(format!(
+                "{} [{}] {}",
+                if file_index == selected { ">" } else { " " },
+                if app.staged_file_is_included(file_index) {
+                    "x"
+                } else {
+                    " "
+                },
+                file.label()
+            ))
+        })
         .collect::<Vec<_>>();
     frame.render_widget(
         List::new(items).style(focused_style(focused)),
@@ -401,11 +432,15 @@ fn render_staged_changes(frame: &mut Frame, area: Rect, app: &App) {
     );
 }
 
-fn render_status(frame: &mut Frame, area: Rect, status: &str) {
+fn render_status(frame: &mut Frame, area: Rect, status: &str, is_error: bool) {
     frame.render_widget(
         Paragraph::new(status)
-            .block(Block::default().borders(Borders::ALL).title(" Error "))
-            .style(Style::default().fg(Color::Red))
+            .block(Block::default().borders(Borders::ALL).title(if is_error {
+                " Error "
+            } else {
+                " Status "
+            }))
+            .style(status_style(is_error))
             .wrap(Wrap { trim: true }),
         area,
     );
@@ -432,7 +467,7 @@ fn render_help(frame: &mut Frame, area: Rect) {
     frame.render_widget(Clear, popup);
     frame.render_widget(
         Paragraph::new(
-            "Keyboard help\n\nUp / Down        Move between fields or scroll staged changes\nTab / Shift+Tab  Next / previous field\nHome / End       First / last staged file\nEnter            Open or select Type\nSpace            Toggle Breaking or Sign\nCtrl+Enter       Commit the current form\nEsc              Close help or cancel\nCtrl+C           Cancel application\nF1               Open or close help",
+            "Keyboard help\n\nUp / Down        Move between fields or select staged files\n                  Leave staged changes at either end\nTab / Shift+Tab  Next / previous field\nHome / End       First / last staged file\nSpace            Toggle Breaking or Sign; include/exclude selected file\nCtrl+Enter       Commit the current form\nEsc              Close help or cancel\nCtrl+C           Cancel application\nF1               Open or close help",
         )
         .block(
             Block::default()
@@ -522,6 +557,10 @@ fn focused_style(focused: bool) -> Style {
     } else {
         Style::default()
     }
+}
+
+fn status_style(is_error: bool) -> Style {
+    Style::default().fg(if is_error { Color::Red } else { Color::Green })
 }
 
 fn clamp_scroll(scroll: usize) -> u16 {

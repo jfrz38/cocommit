@@ -1,8 +1,8 @@
-use std::io;
+use std::{ffi::OsString, io};
 
 use super::{
-    StagedChangeKind, commit_arguments, git_start_error, has_staged_changes, is_inside_work_tree,
-    parse_name_status, parse_numstat,
+    StagedChangeKind, StagedFile, commit_arguments, git_start_error, has_staged_changes,
+    is_inside_work_tree, parse_name_status, parse_numstat, unstage_arguments,
 };
 
 #[test]
@@ -19,6 +19,40 @@ fn adds_signing_flag_only_when_requested() {
 
     assert_eq!(arguments, ["commit", "-S", "-m", "fix: handle error"]);
     assert!(!arguments.contains(&"--no-gpg-sign".to_owned()));
+}
+
+#[test]
+fn builds_literal_unstage_arguments_for_head_and_initial_repositories() {
+    let file = StagedFile::for_display(
+        StagedChangeKind::Renamed,
+        "new name.txt",
+        Some("old name.txt".to_owned()),
+    );
+
+    assert_eq!(
+        unstage_arguments(&[file.clone()], true),
+        [
+            "--literal-pathspecs",
+            "restore",
+            "--staged",
+            "--",
+            "old name.txt",
+            "new name.txt",
+        ]
+        .map(OsString::from)
+    );
+    assert_eq!(
+        unstage_arguments(&[file], false),
+        [
+            "--literal-pathspecs",
+            "update-index",
+            "--force-remove",
+            "--",
+            "old name.txt",
+            "new name.txt",
+        ]
+        .map(OsString::from)
+    );
 }
 
 #[test]

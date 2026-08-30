@@ -48,20 +48,20 @@ fn back_tab_cycles_in_reverse() {
 }
 
 #[test]
-fn staged_changes_focus_scrolls_without_leaving_the_list() {
+fn staged_changes_select_files_and_leave_the_list_at_its_boundaries() {
     let mut app = App::new(false);
     app.set_staged_changes(crate::git::StagedChanges {
         files: vec![
-            crate::git::StagedFile {
-                kind: crate::git::StagedChangeKind::Added,
-                path: "one.txt".to_owned(),
-                previous_path: None,
-            },
-            crate::git::StagedFile {
-                kind: crate::git::StagedChangeKind::Modified,
-                path: "two.txt".to_owned(),
-                previous_path: None,
-            },
+            crate::git::StagedFile::for_display(
+                crate::git::StagedChangeKind::Added,
+                "one.txt",
+                None,
+            ),
+            crate::git::StagedFile::for_display(
+                crate::git::StagedChangeKind::Modified,
+                "two.txt",
+                None,
+            ),
         ],
         ..Default::default()
     });
@@ -69,11 +69,21 @@ fn staged_changes_focus_scrolls_without_leaving_the_list() {
 
     app.handle(AppEvent::Down);
     assert_eq!(app.focus, Focus::StagedChanges);
-    assert_eq!(app.staged_scroll, 1);
+    assert_eq!(app.staged_selected, 1);
+    app.handle(AppEvent::Down);
+    assert_eq!(app.focus, Focus::Submit);
+    app.handle(AppEvent::Up);
+    assert_eq!(app.focus, Focus::StagedChanges);
     app.handle(AppEvent::Edit(Edit::Home));
-    assert_eq!(app.staged_scroll, 0);
+    assert_eq!(app.staged_selected, 0);
+    app.handle(AppEvent::Up);
+    assert_eq!(app.focus, Focus::Sign);
+    app.handle(AppEvent::Down);
+    assert_eq!(app.focus, Focus::StagedChanges);
+    app.handle(AppEvent::Edit(Edit::Home));
+    assert_eq!(app.staged_selected, 0);
     app.handle(AppEvent::Edit(Edit::End));
-    assert_eq!(app.staged_scroll, 1);
+    assert_eq!(app.staged_selected, 1);
 }
 
 #[test]
@@ -90,6 +100,56 @@ fn space_only_toggles_boolean_controls() {
     focus(&mut app, Focus::Sign);
     app.handle(AppEvent::Space);
     assert!(app.sign);
+}
+
+#[test]
+fn space_on_an_empty_staged_list_is_a_noop() {
+    let mut app = App::new(false);
+    focus(&mut app, Focus::StagedChanges);
+
+    assert_eq!(app.handle(AppEvent::Space), AppAction::Continue);
+    assert!(app.excluded_staged_files().is_empty());
+}
+
+#[test]
+fn space_excludes_the_selected_file_but_keeps_one_file_included() {
+    let mut app = App::new(false);
+    app.set_staged_changes(crate::git::StagedChanges {
+        files: vec![
+            crate::git::StagedFile::for_display(
+                crate::git::StagedChangeKind::Added,
+                "one.txt",
+                None,
+            ),
+            crate::git::StagedFile::for_display(
+                crate::git::StagedChangeKind::Modified,
+                "two.txt",
+                None,
+            ),
+        ],
+        ..Default::default()
+    });
+    focus(&mut app, Focus::StagedChanges);
+    app.handle(AppEvent::Down);
+
+    assert_eq!(app.handle(AppEvent::Space), AppAction::Continue);
+    assert_eq!(app.included_staged_count(), 1);
+    assert_eq!(
+        app.excluded_staged_files(),
+        vec![crate::git::StagedFile::for_display(
+            crate::git::StagedChangeKind::Modified,
+            "two.txt",
+            None,
+        )]
+    );
+
+    app.handle(AppEvent::Up);
+    assert_eq!(app.handle(AppEvent::Space), AppAction::Continue);
+    assert_eq!(
+        app.status_message(),
+        Some("Cannot unstage the last staged file")
+    );
+    assert!(app.status_is_error());
 }
 
 #[test]
@@ -255,6 +315,19 @@ fn input_rejects_control_characters_without_changing_the_field() {
         app.validation_message(),
         Some("Paste contains unsupported control characters or is too large")
     );
+}
+
+#[test]
+fn validation_feedback_takes_priority_over_operation_feedback() {
+    let mut app = App::new(false);
+    app.validation_error = Some(ValidationError {
+        field: DraftField::Message,
+        kind: ValidationErrorKind::Required,
+    });
+    app.set_operation_error("Cannot unstage the last staged file");
+
+    assert_eq!(app.status_message(), Some("Message is required"));
+    assert!(app.status_is_error());
 }
 
 #[test]

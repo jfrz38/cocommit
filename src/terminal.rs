@@ -35,7 +35,11 @@ use crate::{
 /// The result returned by the interactive form after terminal restoration.
 pub enum TerminalResult {
     Cancelled,
-    Submitted { draft: CommitDraft, sign: bool },
+    Submitted {
+        draft: CommitDraft,
+        sign: bool,
+        excluded_files: Vec<crate::git::StagedFile>,
+    },
 }
 
 static TERMINAL_STATE_ACTIVE: AtomicBool = AtomicBool::new(false);
@@ -115,6 +119,7 @@ impl TerminalSession {
                     return Ok(TerminalResult::Submitted {
                         draft,
                         sign: app.sign,
+                        excluded_files: app.excluded_staged_files(),
                     });
                 }
             }

@@ -33,10 +33,12 @@ fn renders_staged_change_counts_and_a_scrolled_file_list() {
     let mut app = App::new(false);
     app.set_staged_changes(crate::git::StagedChanges {
         files: (0..10)
-            .map(|index| crate::git::StagedFile {
-                kind: crate::git::StagedChangeKind::Added,
-                path: format!("src/archivo-{index}.rs"),
-                previous_path: None,
+            .map(|index| {
+                crate::git::StagedFile::for_display(
+                    crate::git::StagedChangeKind::Added,
+                    format!("src/archivo-{index}.rs"),
+                    None,
+                )
             })
             .collect(),
         insertions: 12,
@@ -44,11 +46,12 @@ fn renders_staged_change_counts_and_a_scrolled_file_list() {
         binary_files: 1,
     });
     app.focus = Focus::StagedChanges;
-    app.staged_scroll = 8;
+    app.staged_selected = 9;
 
     let output = rendered(&app, 100, 40);
     assert!(output.contains("Staged changes"));
     assert!(output.contains("A:10 M:0 D:0 R:0"));
+    assert!(output.contains("> [x] A src/archivo-9.rs"));
     assert!(output.contains("archivo-9.rs"));
 }
 
@@ -85,6 +88,51 @@ fn renders_compact_layout_and_scrolls_to_the_focused_field() {
     app.focus = Focus::Submit;
     draw(&app, 40, 12);
     draw(&app, 30, 8);
+}
+
+#[test]
+fn renders_excluded_staged_file_with_an_empty_checkbox() {
+    let mut app = App::new(false);
+    app.set_staged_changes(crate::git::StagedChanges {
+        files: vec![
+            crate::git::StagedFile::for_display(
+                crate::git::StagedChangeKind::Added,
+                "src/main.rs",
+                None,
+            ),
+            crate::git::StagedFile::for_display(
+                crate::git::StagedChangeKind::Modified,
+                "src/ui.rs",
+                None,
+            ),
+        ],
+        ..Default::default()
+    });
+    app.focus = Focus::StagedChanges;
+    app.handle(crate::app::AppEvent::Space);
+
+    let output = rendered(&app, 100, 40);
+    assert!(output.contains("1/2 included"));
+    assert!(output.contains("> [ ] A src/main.rs"));
+}
+
+#[test]
+fn keeps_preview_below_commit_in_a_tall_compact_terminal() {
+    let app = App::new(false);
+    let width = 40usize;
+    let output = rendered(&app, width as u16, 40);
+    let commit = output.find("[ Commit ]").expect("Commit should render") / width;
+    let preview = output.find("Preview:").expect("preview should render") / width;
+
+    assert_eq!(preview, commit + 1);
+}
+
+#[test]
+fn renders_staged_detail_at_the_compact_layout_boundary() {
+    let app = App::new(false);
+    let output = rendered(&app, 50, 30);
+
+    assert!(output.contains("Staged changes"));
 }
 
 #[test]
