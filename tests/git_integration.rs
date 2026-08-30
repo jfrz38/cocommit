@@ -96,6 +96,130 @@ fn preflight_reports_the_failing_git_command_outside_a_repository() {
     );
 }
 
+#[test]
+fn staged_change_summary_matches_git_for_common_index_changes() {
+    if !require_git() {
+        return;
+    }
+    let repository = tempdir().expect("temporary repository should be created");
+    run_git(repository.path(), ["init"]);
+    run_git(
+        repository.path(),
+        ["config", "user.name", "Cocommit Integration Test"],
+    );
+    run_git(
+        repository.path(),
+        ["config", "user.email", "cocommit@example.test"],
+    );
+    run_git(repository.path(), ["config", "commit.gpgSign", "false"]);
+    fs::create_dir(repository.path().join("docs")).expect("docs directory should be created");
+    fs::write(repository.path().join("modified.txt"), "before\n")
+        .expect("modified file should be written");
+    fs::write(repository.path().join("deleted.txt"), "remove\n")
+        .expect("deleted file should be written");
+    fs::write(repository.path().join("docs/guide.md"), "guide\n").expect("guide should be written");
+    run_git(repository.path(), ["add", "."]);
+    run_git(repository.path(), ["commit", "-m", "chore: baseline"]);
+
+    fs::write(repository.path().join("modified.txt"), "after\n")
+        .expect("modified file should be updated");
+    fs::remove_file(repository.path().join("deleted.txt")).expect("deleted file should be removed");
+    fs::write(repository.path().join("added-界.txt"), "added\n")
+        .expect("added file should be written");
+    run_git(
+        repository.path(),
+        ["mv", "docs/guide.md", "docs/usage-界.md"],
+    );
+    run_git(repository.path(), ["add", "-A"]);
+
+    let summary = cocommit::git::preflight(repository.path())
+        .expect("staged repository summary should be read");
+
+    assert_eq!(summary.files.len(), 4);
+    assert_eq!(summary.status_summary(), "A:1 M:1 D:1 R:1");
+    assert_eq!((summary.insertions, summary.deletions), (2, 2));
+    assert!(
+        summary
+            .files
+            .iter()
+            .any(|file| file.path == "docs/usage-界.md" && file.previous_path.is_some())
+    );
+}
+
+#[test]
+fn unstaging_each_change_preserves_the_working_tree_and_refreshes_the_summary() {
+    if !require_git() {
+        return;
+    }
+    let repository = tempdir().expect("temporary repository should be created");
+    run_git(repository.path(), ["init"]);
+    configure_identity(repository.path());
+    fs::create_dir(repository.path().join("docs")).expect("docs directory should be created");
+    fs::write(repository.path().join("modified.txt"), "before\n")
+        .expect("modified file should be written");
+    fs::write(repository.path().join("deleted.txt"), "remove\n")
+        .expect("deleted file should be written");
+    fs::write(repository.path().join("docs/guide.md"), "guide\n").expect("guide should be written");
+    run_git(repository.path(), ["add", "."]);
+    run_git(repository.path(), ["commit", "-m", "chore: baseline"]);
+
+    fs::write(repository.path().join("modified.txt"), "after\n")
+        .expect("modified file should be updated");
+    fs::remove_file(repository.path().join("deleted.txt")).expect("deleted file should be removed");
+    fs::write(repository.path().join("added [literal].txt"), "added\n")
+        .expect("added file should be written");
+    run_git(repository.path(), ["mv", "docs/guide.md", "docs/usage.md"]);
+    run_git(repository.path(), ["add", "-A"]);
+
+    let summary =
+        cocommit::git::staged_changes(repository.path()).expect("staged summary should be read");
+    cocommit::git::unstage(repository.path(), &summary.files)
+        .expect("selected files should unstage successfully");
+    let summary =
+        cocommit::git::staged_changes(repository.path()).expect("staged summary should be read");
+
+    assert!(summary.files.is_empty());
+    assert_eq!(
+        fs::read_to_string(repository.path().join("modified.txt")).unwrap(),
+        "after\n"
+    );
+    assert!(!repository.path().join("deleted.txt").exists());
+    assert_eq!(
+        fs::read_to_string(repository.path().join("added [literal].txt")).unwrap(),
+        "added\n"
+    );
+    assert!(repository.path().join("docs/usage.md").exists());
+}
+
+#[test]
+fn unstaging_an_initial_repository_file_keeps_it_in_the_working_tree() {
+    if !require_git() {
+        return;
+    }
+    let repository = tempdir().expect("temporary repository should be created");
+    run_git(repository.path(), ["init"]);
+    fs::write(repository.path().join("initial [file].txt"), "content\n")
+        .expect("initial file should be written");
+    run_git(repository.path(), ["add", "initial [file].txt"]);
+    let file = cocommit::git::staged_changes(repository.path())
+        .expect("staged summary should be read")
+        .files
+        .into_iter()
+        .next()
+        .expect("initial file should be staged");
+
+    cocommit::git::unstage(repository.path(), &[file])
+        .expect("initial repository file should unstage");
+    let summary =
+        cocommit::git::staged_changes(repository.path()).expect("staged summary should be read");
+
+    assert!(summary.files.is_empty());
+    assert_eq!(
+        fs::read_to_string(repository.path().join("initial [file].txt")).unwrap(),
+        "content\n"
+    );
+}
+
 fn require_git() -> bool {
     let Ok(version) = Command::new("git").arg("--version").status() else {
         eprintln!("skipping Git integration test because git --version could not run");
@@ -115,4 +239,16 @@ fn run_git<const N: usize>(repository: &Path, arguments: [&str; N]) {
         .status()
         .expect("Git command should run");
     assert!(status.success(), "Git command should succeed");
+}
+
+fn configure_identity(repository: &Path) {
+    run_git(
+        repository,
+        ["config", "user.name", "Cocommit Integration Test"],
+    );
+    run_git(
+        repository,
+        ["config", "user.email", "cocommit@example.test"],
+    );
+    run_git(repository, ["config", "commit.gpgSign", "false"]);
 }

@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/github/license/jfrz38/cocommit)](LICENSE)
 [![MSRV](https://img.shields.io/badge/rustc-1.94.1%2B-blue)](https://www.rust-lang.org)
 
-`cocommit` is a small keyboard-driven terminal UI for creating Conventional Commit headers from already staged changes. It previews the message as you edit it, then delegates the commit to your installed Git CLI.
+`cocommit` is a small keyboard-driven terminal UI for reviewing and refining staged changes before creating Conventional Commit headers. It previews the message as you edit it, then delegates Git operations to your installed Git CLI.
 
 The name combines **CO**nventional and **COMMIT**s, hence the coconut 🥥.
 
@@ -20,6 +20,7 @@ feat(api)!: add authentication (#123)
 
 - Build valid Conventional Commit headers interactively.
 - Preview the final message before committing.
+- Review staged file states and aggregate line statistics, and unstage an accidental file without leaving the composer.
 - Preserve Git hooks, signing, credentials, and native output.
 - Run from anywhere inside your Git working tree.
 - Stay entirely in the terminal.
@@ -91,11 +92,11 @@ Invalid submission keeps the form open, displays a field-specific error, and foc
 
 | Key | Behavior |
 |---|---|
-| Up / Down | Move between form fields and wrap around. In the type picker, change the highlighted item. |
+| Up / Down | Move between form fields and wrap around. In Staged changes, select the previous or next file; at either end, move to the adjacent form field. In the type picker, change the highlighted item. |
 | Tab / Shift+Tab | Move to the next or previous form field. |
 | Enter | Open the type picker, advance from a text field, select the highlighted type, or submit when Commit is focused. |
 | Ctrl+Enter | Submit from any form field. |
-| Space | Toggle Breaking or Sign when focused; insert a space in text fields and the type-picker query. |
+| Space | Toggle Breaking or Sign when focused; include or exclude the selected staged file; insert a space in text fields and the type-picker query. The last included file cannot be excluded. |
 | F1 | Open or close keyboard help without losing form state. |
 | Esc | Close the type picker or help; cancel from the form. |
 | Ctrl+C | Cancel without invoking Git. |
@@ -103,7 +104,7 @@ Invalid submission keeps the form open, displays a field-specific error, and foc
 
 Typing while Type is focused opens the picker and filters standard types with a case-insensitive prefix search. For example, `d` and `do` select `docs` by default; a query with no matching prefix can be selected as a custom type. cocommit is keyboard-driven and does not support mouse input.
 
-The layout switches to a compact, vertically scrolling view in smaller terminals. Below `30x8`, it displays a resize instruction instead of the form.
+The expanded layout shows a bounded, scrollable staged-change list with file count, `A/M/D/R` states, insertions, deletions, binary-file count, and inclusion checkboxes. Focus `Staged changes` with `Tab`; `Up`/`Down` select a visible file and move to Sign or Commit at the list boundaries, while `Home`/`End` move to its first/last item. Press `Space` to include or exclude the selected file. The working tree and Git index remain unchanged until Commit, when all excluded files are unstaged once before creating the commit. The final included file is protected. The layout switches to a compact, vertically scrolling view in smaller terminals without leaving unused space between Commit and Preview. Below `30x8`, it displays a resize instruction instead of the form.
 
 ## Configuration
 
@@ -125,7 +126,7 @@ Missing configuration, or an unavailable platform configuration directory, uses 
 
 ## Git Behavior
 
-Before opening the form, cocommit verifies that Git is available, the current directory is inside a usable working tree, and staged changes exist. This works from subdirectories and linked worktrees. Git remains authoritative after that check, so a changed index can still cause the final commit to fail.
+Before opening the form, cocommit verifies that Git is available, the current directory is inside a usable working tree, and staged changes exist. It then reads a NUL-delimited index summary; unusual names are safely escaped for the terminal while their original paths are retained for Git. Excluded files are removed from the index with literal pathspecs immediately before the commit. This works from subdirectories and linked worktrees. Git remains authoritative after that check, so an external index change can still cause the final commit to fail.
 
 After a valid submission, cocommit restores the terminal and runs `git commit` with inherited standard streams. This preserves normal Git output, hooks, credentials, signing prompts, and pinentry behavior. Commit messages are passed directly to Git without shell interpretation. A hook or signing failure is therefore shown directly by Git and returns a failure from cocommit. Cancelling restores the terminal and exits successfully without invoking Git.
 
@@ -140,7 +141,7 @@ After a valid submission, cocommit restores the terminal and runs `git commit` w
 ## v1 Limitations
 
 - Only Conventional Commit headers are supported; bodies, footers, amend mode, and empty commits are not supported.
-- cocommit does not stage or unstage files, show diffs or history, manage branches, push, or create pull requests.
+- cocommit does not stage files, render full diffs or history, manage branches, push, or create pull requests.
 - It does not replace Git identity, hooks, credentials, editors, or signing configuration.
 - AI-generated messages, changelog generation, dry runs, copy-only mode, and CLI field prefills are not supported.
 - Configuration is global only; repository-local settings and configurable types, scopes, or issue formatting are not supported.

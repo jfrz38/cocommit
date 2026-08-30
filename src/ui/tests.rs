@@ -29,6 +29,33 @@ fn renders_form_at_normal_terminal_size() {
 }
 
 #[test]
+fn renders_staged_change_counts_and_a_scrolled_file_list() {
+    let mut app = App::new(false);
+    app.set_staged_changes(crate::git::StagedChanges {
+        files: (0..10)
+            .map(|index| {
+                crate::git::StagedFile::for_display(
+                    crate::git::StagedChangeKind::Added,
+                    format!("src/archivo-{index}.rs"),
+                    None,
+                )
+            })
+            .collect(),
+        insertions: 12,
+        deletions: 3,
+        binary_files: 1,
+    });
+    app.focus = Focus::StagedChanges;
+    app.staged_selected = 9;
+
+    let output = rendered(&app, 100, 40);
+    assert!(output.contains("Staged changes"));
+    assert!(output.contains("A:10 M:0 D:0 R:0"));
+    assert!(output.contains("> [x] A src/archivo-9.rs"));
+    assert!(output.contains("archivo-9.rs"));
+}
+
+#[test]
 fn renders_error_only_after_validation_fails() {
     let mut app = App::new(false);
     assert!(!rendered(&app, 100, 40).contains("Error"));
@@ -64,6 +91,51 @@ fn renders_compact_layout_and_scrolls_to_the_focused_field() {
 }
 
 #[test]
+fn renders_excluded_staged_file_with_an_empty_checkbox() {
+    let mut app = App::new(false);
+    app.set_staged_changes(crate::git::StagedChanges {
+        files: vec![
+            crate::git::StagedFile::for_display(
+                crate::git::StagedChangeKind::Added,
+                "src/main.rs",
+                None,
+            ),
+            crate::git::StagedFile::for_display(
+                crate::git::StagedChangeKind::Modified,
+                "src/ui.rs",
+                None,
+            ),
+        ],
+        ..Default::default()
+    });
+    app.focus = Focus::StagedChanges;
+    app.handle(crate::app::AppEvent::Space);
+
+    let output = rendered(&app, 100, 40);
+    assert!(output.contains("1/2 included"));
+    assert!(output.contains("> [ ] A src/main.rs"));
+}
+
+#[test]
+fn keeps_preview_below_commit_in_a_tall_compact_terminal() {
+    let app = App::new(false);
+    let width = 40usize;
+    let output = rendered(&app, width as u16, 40);
+    let commit = output.find("[ Commit ]").expect("Commit should render") / width;
+    let preview = output.find("Preview:").expect("preview should render") / width;
+
+    assert_eq!(preview, commit + 1);
+}
+
+#[test]
+fn renders_staged_detail_at_the_compact_layout_boundary() {
+    let app = App::new(false);
+    let output = rendered(&app, 50, 30);
+
+    assert!(output.contains("Staged changes"));
+}
+
+#[test]
 fn renders_picker_in_a_compact_terminal() {
     let mut app = App::new(true);
     app.handle(crate::app::AppEvent::Enter);
@@ -95,6 +167,7 @@ fn renders_every_focus_with_long_unicode_input_and_error() {
         Focus::Message,
         Focus::Issue,
         Focus::Sign,
+        Focus::StagedChanges,
         Focus::Submit,
     ] {
         app.focus = focus;

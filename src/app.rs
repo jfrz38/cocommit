@@ -2,7 +2,10 @@
 
 use tui_input::{Input, InputRequest};
 
-use crate::commit::{CommitDraft, DraftField, ValidationError, ValidationErrorKind};
+use crate::{
+    commit::{CommitDraft, DraftField, ValidationError, ValidationErrorKind},
+    git::{StagedChanges, StagedFile},
+};
 
 pub const STANDARD_TYPES: [&str; 11] = [
     "feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert",
@@ -21,6 +24,7 @@ pub enum Focus {
     Message,
     Issue,
     Sign,
+    StagedChanges,
     Submit,
 }
 
@@ -121,8 +125,17 @@ pub struct App {
     pub focus: Focus,
     pub mode: Mode,
     pub sign: bool,
+    pub staged_changes: StagedChanges,
+    pub staged_selected: usize,
+    staged_included: Vec<bool>,
     pub validation_error: Option<ValidationError>,
     pub input_error: Option<&'static str>,
+    operation_status: Option<OperationStatus>,
+}
+
+#[derive(Debug, Clone)]
+struct OperationStatus {
+    message: String,
 }
 
 impl App {
@@ -138,13 +151,50 @@ impl App {
             focus: Focus::CommitType,
             mode: Mode::Form,
             sign,
+            staged_changes: StagedChanges::default(),
+            staged_selected: 0,
+            staged_included: Vec::new(),
             validation_error: None,
             input_error: None,
+            operation_status: None,
         }
     }
 
     pub fn draft(&self) -> Result<CommitDraft, Vec<ValidationError>> {
         self.form.draft()
+    }
+
+    pub fn set_staged_changes(&mut self, staged_changes: StagedChanges) {
+        self.staged_changes = staged_changes;
+        self.staged_selected = 0;
+        self.staged_included = vec![true; self.staged_changes.files.len()];
+    }
+
+    pub fn staged_file_is_included(&self, index: usize) -> bool {
+        self.staged_included.get(index).copied().unwrap_or(false)
+    }
+
+    pub fn included_staged_count(&self) -> usize {
+        self.staged_included
+            .iter()
+            .filter(|included| **included)
+            .count()
+    }
+
+    pub fn excluded_staged_files(&self) -> Vec<StagedFile> {
+        self.staged_changes
+            .files
+            .iter()
+            .zip(&self.staged_included)
+            .filter(|&(_, included)| !included)
+            .map(|(file, _)| file.clone())
+            .collect()
+    }
+
+    fn set_operation_error(&mut self, message: impl Into<String>) {
+        self.operation_status = Some(OperationStatus {
+            message: message.into(),
+        });
     }
 
     /// Renders the current form state without requiring it to be valid for submission.
@@ -195,6 +245,18 @@ impl App {
             }))
     }
 
+    pub fn status_message(&self) -> Option<&str> {
+        self.validation_message().or_else(|| {
+            self.operation_status
+                .as_ref()
+                .map(|status| status.message.as_str())
+        })
+    }
+
+    pub fn status_is_error(&self) -> bool {
+        self.validation_message().is_some() || self.operation_status.is_some()
+    }
+
     pub fn handle(&mut self, event: AppEvent) -> AppAction {
         if matches!(event, AppEvent::Help) {
             self.toggle_help();
@@ -229,15 +291,25 @@ impl App {
 
     fn handle_form(&mut self, event: AppEvent) -> AppAction {
         match event {
-            AppEvent::Tab | AppEvent::Down => self.focus = self.focus.next(),
-            AppEvent::BackTab | AppEvent::Up => self.focus = self.focus.previous(),
+            AppEvent::Tab => self.focus = self.focus.next(),
+            AppEvent::BackTab => self.focus = self.focus.previous(),
+            AppEvent::Down if self.focus == Focus::StagedChanges => self.move_staged(1),
+            AppEvent::Up if self.focus == Focus::StagedChanges => self.move_staged(-1),
+            AppEvent::Down => self.focus = self.focus.next(),
+            AppEvent::Up => self.focus = self.focus.previous(),
+            AppEvent::Edit(Edit::Home) if self.focus == Focus::StagedChanges => {
+                self.staged_selected = 0;
+            }
+            AppEvent::Edit(Edit::End) if self.focus == Focus::StagedChanges => {
+                self.staged_selected = self.staged_changes.files.len().saturating_sub(1);
+            }
             AppEvent::Enter => match self.focus {
                 Focus::CommitType => self.open_picker(),
                 Focus::Scope => self.focus = Focus::Breaking,
                 Focus::Message => self.focus = Focus::Issue,
                 Focus::Issue => self.focus = Focus::Sign,
                 Focus::Submit => return self.submit(),
-                Focus::Breaking | Focus::Sign => {}
+                Focus::Breaking | Focus::Sign | Focus::StagedChanges => {}
             },
             AppEvent::Submit => return self.submit(),
             AppEvent::Space => match self.focus {
@@ -250,6 +322,20 @@ impl App {
                     self.clear_validation_error();
                 }
                 Focus::Scope | Focus::Message | Focus::Issue => self.edit_form(Edit::Insert(' ')),
+                Focus::StagedChanges if self.staged_changes.files.is_empty() => {}
+                Focus::StagedChanges
+                    if self.staged_file_is_included(self.staged_selected)
+                        && self.included_staged_count() <= 1 =>
+                {
+                    self.set_operation_error("Cannot unstage the last staged file");
+                }
+                Focus::StagedChanges => {
+                    let selected = self
+                        .staged_selected
+                        .min(self.staged_changes.files.len() - 1);
+                    self.staged_included[selected] = !self.staged_included[selected];
+                    self.operation_status = None;
+                }
                 _ => {}
             },
             AppEvent::Escape | AppEvent::Cancel => return AppAction::Cancel,
@@ -422,6 +508,27 @@ impl App {
     fn clear_validation_error(&mut self) {
         self.validation_error = None;
         self.input_error = None;
+        self.operation_status = None;
+    }
+
+    fn move_staged(&mut self, direction: isize) {
+        if self.staged_changes.files.is_empty() {
+            self.focus = if direction < 0 {
+                Focus::Sign
+            } else {
+                Focus::Submit
+            };
+            return;
+        }
+        let last = self.staged_changes.files.len() - 1;
+        if direction < 0 && self.staged_selected == 0 {
+            self.focus = Focus::Sign;
+        } else if direction > 0 && self.staged_selected == last {
+            self.focus = Focus::Submit;
+        } else {
+            self.staged_selected =
+                (self.staged_selected as isize + direction).clamp(0, last as isize) as usize;
+        }
     }
 }
 
@@ -433,7 +540,8 @@ impl Focus {
             Self::Breaking => Self::Message,
             Self::Message => Self::Issue,
             Self::Issue => Self::Sign,
-            Self::Sign => Self::Submit,
+            Self::Sign => Self::StagedChanges,
+            Self::StagedChanges => Self::Submit,
             Self::Submit => Self::CommitType,
         }
     }
@@ -446,7 +554,8 @@ impl Focus {
             Self::Message => Self::Breaking,
             Self::Issue => Self::Message,
             Self::Sign => Self::Issue,
-            Self::Submit => Self::Sign,
+            Self::StagedChanges => Self::Sign,
+            Self::Submit => Self::StagedChanges,
         }
     }
 }
@@ -478,7 +587,7 @@ fn field_limit(focus: Focus) -> usize {
         Focus::Message => MAX_MESSAGE_LENGTH,
         Focus::Issue => MAX_ISSUE_LENGTH,
         Focus::CommitType => MAX_TYPE_LENGTH,
-        Focus::Breaking | Focus::Sign | Focus::Submit => 0,
+        Focus::Breaking | Focus::Sign | Focus::StagedChanges | Focus::Submit => 0,
     }
 }
 

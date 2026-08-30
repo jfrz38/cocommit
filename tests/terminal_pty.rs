@@ -89,6 +89,29 @@ fn pty_cancel_exits_cleanly() {
 }
 
 #[test]
+fn pty_space_does_not_restart_the_terminal_session() {
+    let directory = staged_repository();
+    let (mut child, mut reader, mut writer) = spawn_in_pty(&directory);
+    writer
+        .write_all(b" \x1b")
+        .expect("space and escape should be sent");
+    writer.flush().expect("input should be flushed");
+
+    assert!(wait_for_exit(child.as_mut()).success());
+    drop(writer);
+
+    let mut output = String::new();
+    reader
+        .read_to_string(&mut output)
+        .expect("PTY output should be readable");
+    assert_eq!(
+        output.matches("\x1b[?1049h").count(),
+        1,
+        "space should not recreate the alternate-screen session"
+    );
+}
+
+#[test]
 fn pty_sigterm_restores_before_terminating() {
     let directory = staged_repository();
     let (mut child, mut reader, writer) = spawn_in_pty(&directory);

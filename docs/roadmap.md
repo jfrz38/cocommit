@@ -18,13 +18,13 @@ No tag, GitHub Release, or public package should be created until Iterations 10 
 It owns:
 
 - Composing and validating complete Conventional Commit messages.
-- Presenting read-only context about the already prepared Git index.
+- Presenting context about the prepared Git index and removing an accidental staged file.
 - Applying user and repository message conventions.
 - Safely handing the validated message to the installed Git CLI.
 
 Git continues to own:
 
-- Staging and unstaging files.
+- Staging files.
 - Full diff and history navigation.
 - Branches, remotes, pushes, and pull requests.
 - Identity, credentials, hooks, editors, and signing infrastructure.
@@ -149,7 +149,7 @@ Work:
 - Present a bounded, scrollable file summary in the TUI.
 - Handle subdirectories, linked worktrees, Unicode names, and unusual file names safely.
 - Refresh or clearly mark the summary if the index changes while the form is open.
-- Keep all index interaction read-only.
+- Keep index interaction limited to unstaging an explicitly selected file; do not add staging or diff rendering.
 
 Completion criteria:
 
@@ -157,7 +157,7 @@ Completion criteria:
 - Empty-index behavior remains a preflight failure.
 - No shell parsing or lossy file-name splitting is introduced.
 - The compact layout remains usable when the summary contains many files.
-- Staging, unstaging, and full diff rendering remain outside the product boundary.
+- Staging and full diff rendering remain outside the product boundary.
 
 ### Iteration 14: Repository-local configuration
 
@@ -410,6 +410,31 @@ Iteration 23 cannot start until all of the following are true:
 ## Post-0.1.0 roadmap
 
 The following work improves integration and efficiency but is not required for a safe and complete first release. Its order should be reconsidered using real user feedback.
+
+### Iteration 24: Working-tree context and optional index preparation
+
+The default workflow remains committing from the prepared Git index. This iteration may expose broader working-tree context, but it must not make a file-level toggle imply an unsafe or ambiguous Git operation.
+
+Work:
+
+- Record an ADR that defines whether optional index preparation remains within the product boundary and how it coexists with the staged-only composer.
+- Keep `staged` as the default view, showing exactly the content eligible for the commit.
+- Add an optional global UI preference for the initial changes view: `staged`, `all`, or `hidden`. The preference must not change which files are committed implicitly.
+- In the `all` view, present separate staged, unstaged, untracked, and partially staged sections with unambiguous labels.
+- Keep inclusion checkboxes exclusive to the staged commit snapshot. Use explicit actions such as `Stage file` for changes outside the index.
+- Decide whether full-file staging is supported at all. If it is, warn before staging a partially staged file and never silently add its unstaged content to the reviewed commit snapshot.
+- Do not claim hunk-level selection unless the application can faithfully display, select, stage, and test hunks.
+- Define refresh behavior for external index or working-tree changes while the form is open.
+- Preserve cancellation without changing the index. Apply any selected index mutations only after terminal restoration and before the final Git commit.
+
+Completion criteria:
+
+- The staged-only default remains usable without configuring the new view.
+- Every rendered item clearly identifies whether it is staged, unstaged, untracked, or partially staged.
+- A file-level action never causes unstaged content from a partially staged file to enter the commit without explicit confirmation and a refreshed review state.
+- Temporary-repository integration tests cover staged, unstaged, untracked, partially staged, renamed, deleted, and unusual-path cases.
+- State-transition and render tests cover switching views, explicit index actions, cancellation, and external-change feedback.
+- The updated product boundary, configuration schema, interaction model, Git command behavior, and recovery semantics are documented in the same change.
 
 ### CLI automation
 

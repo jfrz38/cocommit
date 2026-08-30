@@ -48,6 +48,9 @@ Keep command construction observable without running a commit. Test:
 - Other statuses are errors.
 - Missing Git executable diagnostics identify Git and the command that could not start.
 - Failed preflight diagnostics retain the command and Git stderr.
+- NUL-delimited `--name-status` parsing for additions, modifications, deletions, renames, and unusual path characters.
+- NUL-delimited `--numstat` parsing for text, binary, and renamed files.
+- Literal unstage argument construction for normal and initial repositories, including both rename paths.
 
 ### CLI contract
 
@@ -61,7 +64,7 @@ Test state transitions directly:
 
 - Focus wraps with arrow keys, Tab, and Shift+Tab.
 - Ctrl+Enter submits through normal validation outside the type picker.
-- Space changes only focused boolean controls.
+- Space changes focused boolean controls, changes the selected file's inclusion state, and protects the final included file.
 - Type picker opens and closes correctly.
 - Filtering selects a standard type or custom query.
 - Submit validation focuses the first invalid field.
@@ -69,7 +72,7 @@ Test state transitions directly:
 - NUL, escape, and other control characters are rejected from edits and paste without changing the field.
 - Field and paste limits reject the whole input without partial insertion, including Unicode input counted as characters rather than bytes.
 
-Use `ratatui::backend::TestBackend` for narrow render smoke tests: normal terminal, compact terminal with vertical scroll, too-small terminal, form mode, and picker mode. Assert that rendering does not panic; do not snapshot the entire screen.
+Use `ratatui::backend::TestBackend` for narrow render smoke tests: normal terminal, compact terminal with vertical scroll, too-small terminal, form mode, picker mode, and a long staged-change list. Assert that rendering does not panic; do not snapshot the entire screen.
 
 ## Git integration test
 
@@ -85,7 +88,7 @@ An integration test uses `tempfile` and the real Git CLI:
 
 No signing or hook behavior is tested automatically because those depend on host configuration. The product design intentionally delegates those workflows to Git.
 
-The integration suite also covers preflight in an empty temporary repository, a staged repository, and a directory outside a repository.
+The integration suite also covers preflight in an empty temporary repository, a staged repository, and a directory outside a repository. A staged-context scenario creates additions, modifications, deletions, renames, and Unicode names, then verifies the summary against Git. Deferred-unstage scenarios cover all common change kinds, literal path characters, working-tree preservation, and an initial repository without `HEAD`.
 
 ## Quality commands
 
