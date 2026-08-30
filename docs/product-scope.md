@@ -9,7 +9,7 @@ The sole v1 workflow is:
 1. Run `cocommit` inside a Git working tree with staged changes.
 2. Complete the commit fields using the keyboard.
 3. Review the live preview.
-4. Review the concise staged-change snapshot.
+4. Review the concise staged-change list and unstage accidental files if needed.
 5. Select Commit.
 6. Let the installed Git CLI create the commit.
 
@@ -41,7 +41,8 @@ feat(api): add authentication (#123)
 - Require a one-line description.
 - Accept an optional numeric issue or PR identifier and render it as `(#<issue>)`.
 - Provide a live preview for every draft change.
-- Show a read-only snapshot of staged file count, additions, modifications, deletions, renames, and aggregate insertion/deletion statistics.
+- Show staged file count, additions, modifications, deletions, renames, and aggregate insertion/deletion statistics.
+- Include or exclude the selected file with `Space`, preserving its working-tree content and keeping at least one file included for commit.
 - Support an explicit `-S` Git signing choice.
 - Refuse to open the form outside a usable non-bare Git working tree or when there are no staged changes.
 - Refuse to open the form when standard input or standard output is not an interactive terminal.
@@ -49,7 +50,7 @@ feat(api): add authentication (#123)
 
 ## Non-goals for v1
 
-- Staging or unstaging files.
+- Staging files.
 - Full diff viewing, history, branches, pushing, or pull requests.
 - Commit body, footers, amend mode, empty commits, or changelog generation.
 - AI-generated messages.

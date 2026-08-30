@@ -39,7 +39,9 @@ Interpretation:
 
 This naturally supports Git worktrees and subdirectories because Git resolves repository context. Bare repositories are rejected because `--is-inside-work-tree` is not `true`.
 
-After staged changes are confirmed, cocommit reads a display-only snapshot with NUL-delimited `--name-status` and `--numstat` output. This avoids shell parsing and preserves file-record boundaries for spaces, tabs, newlines, Unicode, and renames. Terminal rendering escapes control characters in names. The snapshot is not refreshed while the form is open, and neither command changes the index.
+After staged changes are confirmed, cocommit reads a NUL-delimited summary with `--name-status` and `--numstat` output. This avoids shell parsing and preserves file-record boundaries for spaces, tabs, newlines, Unicode, and renames. Terminal rendering escapes control characters in names while retaining the original paths for later Git arguments.
+
+When the user presses `Space` on a selected file, cocommit only changes that file's inclusion checkbox in memory. On submission, it restores the terminal and removes all excluded files with literal pathspecs before committing. Repositories with `HEAD` run `git --literal-pathspecs restore --staged -- <path...>`; an initial repository runs `git --literal-pathspecs update-index --force-remove -- <path...>`. Renames pass both old and new paths. The working tree is not changed. The final included file is protected so the commit precondition remains true.
 
 The index can change after preflight. Git remains authoritative and may still reject the commit.
 

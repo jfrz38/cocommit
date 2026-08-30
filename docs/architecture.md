@@ -43,12 +43,12 @@ tests/
 
 | Module | Responsibility |
 |---|---|
-| `main.rs` | Orchestrates preflight, config loading, terminal lifecycle, TUI result, and final Git execution. |
+| `main.rs` | Orchestrates preflight, config loading, terminal lifecycle, TUI results, index operations, and final Git execution. |
 | `cli.rs` | Parses the small command-line contract and provides usage text without terminal or Git dependencies. |
 | `commit.rs` | Defines the commit draft, canonical rendering, and validation. Has no terminal or Git dependency. |
 | `config.rs` | Defines defaults, resolves the global path, reads and parses TOML. |
-| `git.rs` | Runs explicit Git commands, interprets exit statuses, constructs `git commit` arguments, and reads the staged-index snapshot. |
-| `app.rs` | Holds editable form state, the read-only staged snapshot, focus, popup state, validation feedback, and state transitions. |
+| `git.rs` | Runs explicit Git commands, interprets exit statuses, constructs `git commit` and literal unstage arguments, and reads the staged index. |
+| `app.rs` | Holds editable form state, staged-file inclusion choices, focus, popup state, feedback, and pure state transitions. |
 | `event.rs` | Maps Crossterm events to small application actions. |
 | `ui.rs` | Renders the form, preview, type picker, status, and footer from `App`. |
 | `terminal.rs` | Owns raw mode, alternate screen, cursor restoration, panic and Unix-signal cleanup, and the synchronous event loop boundary. |
@@ -129,6 +129,7 @@ pub enum AppAction {
 ```text
 parse CLI -> verify interactive streams -> preflight Git -> load config -> initialize terminal -> run UI loop
     -> cancel: restore terminal and exit successfully
+    -> submit with exclusions: restore terminal -> Git unstage excluded files -> Git commit
     -> submit: validate -> restore terminal -> git commit -> exit with Git status
 ```
 

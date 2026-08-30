@@ -50,6 +50,7 @@ Keep command construction observable without running a commit. Test:
 - Failed preflight diagnostics retain the command and Git stderr.
 - NUL-delimited `--name-status` parsing for additions, modifications, deletions, renames, and unusual path characters.
 - NUL-delimited `--numstat` parsing for text, binary, and renamed files.
+- Literal unstage argument construction for normal and initial repositories, including both rename paths.
 
 ### CLI contract
 
@@ -63,7 +64,7 @@ Test state transitions directly:
 
 - Focus wraps with arrow keys, Tab, and Shift+Tab.
 - Ctrl+Enter submits through normal validation outside the type picker.
-- Space changes only focused boolean controls.
+- Space changes focused boolean controls, changes the selected file's inclusion state, and protects the final included file.
 - Type picker opens and closes correctly.
 - Filtering selects a standard type or custom query.
 - Submit validation focuses the first invalid field.
@@ -87,7 +88,7 @@ An integration test uses `tempfile` and the real Git CLI:
 
 No signing or hook behavior is tested automatically because those depend on host configuration. The product design intentionally delegates those workflows to Git.
 
-The integration suite also covers preflight in an empty temporary repository, a staged repository, and a directory outside a repository. A staged-context scenario creates additions, modifications, deletions, renames, and Unicode names, then verifies the summary against Git.
+The integration suite also covers preflight in an empty temporary repository, a staged repository, and a directory outside a repository. A staged-context scenario creates additions, modifications, deletions, renames, and Unicode names, then verifies the summary against Git. Deferred-unstage scenarios cover all common change kinds, literal path characters, working-tree preservation, and an initial repository without `HEAD`.
 
 ## Quality commands
 

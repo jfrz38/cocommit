@@ -13,9 +13,9 @@ The interface remains compact and needs no mouse support.
 │ Issue                                     │
 │ Sign (-S)  [ ]                            │
 │                                            │
-│ Staged changes (snapshot)                  │
+│ Staged changes                              │
 │ 3 files  A:1 M:1 D:0 R:1  +12 -4           │
-│ M src/app.rs                               │
+│ > M src/app.rs                             │
 │ R docs/guide.md -> docs/usage.md           │
 │               [ Commit ]                   │
 ├─ Preview ─────────────────────────────────┤
@@ -27,7 +27,7 @@ The interface remains compact and needs no mouse support.
 └────────────────────────────────────────────┘
 ```
 
-The focused row must have a visually distinct border, label, or background. The preview is rebuilt from the current draft after every edit. The Error block is hidden until a validation or configuration warning needs to be shown, and uses red only when visible.
+The focused row must have a visually distinct border, label, or background. The preview is rebuilt from the current draft after every edit. The status block is hidden until feedback is needed, uses red for errors, and green for successful index operations.
 
 The full bordered layout is used when space allows. Smaller terminals use compact one-line rows with automatic vertical scrolling that keeps the focused field visible. For terminals too small to safely draw even the compact layout, render only a clear resize instruction. Do not construct invalid Ratatui layout areas.
 
@@ -39,7 +39,7 @@ Focus advances in this order:
 Type -> Scope -> Breaking -> Message -> Issue -> Sign -> Staged changes -> Submit
 ```
 
-`Up` and `Down` move backward and forward through fields, respectively, and wrap. When Staged changes is focused, they scroll its bounded file list instead; `Home` and `End` move to the first and last item. `Tab` and `Shift+Tab` always move focus. Typing or pasting while Type is focused opens its popup search. Text input is otherwise active for Scope, Message, and Issue.
+`Up` and `Down` move backward and forward through fields, respectively, and wrap. When Staged changes is focused, they select a visibly highlighted file and scroll its bounded list as necessary; at the first or last file, they move to Sign or Submit. `Home` and `End` move to the first and last item. `Tab` and `Shift+Tab` always move focus. Typing or pasting while Type is focused opens its popup search. Text input is otherwise active for Scope, Message, and Issue.
 
 ## Keyboard behavior
 
@@ -47,12 +47,12 @@ Type -> Scope -> Breaking -> Message -> Issue -> Sign -> Staged changes -> Submi
 |---|---|---|
 | `Tab` | Next field | No action |
 | `Shift+Tab` | Previous field | No action |
-| `Up` / `Down` | Previous / next field | Change highlighted item |
+| `Up` / `Down` | Previous / next field; select staged file when focused | Change highlighted item |
 | `Home` / `End` | First / last staged file when focused | Edit search query |
 | `Enter` | Open Type picker, advance text field, or submit from Commit | Select highlighted item |
 | `Ctrl+Enter` | Submit from any field | No action |
 | `F1` | Open or close help | Open or close help |
-| `Space` | Toggle Breaking or Sign when focused | Insert a search space |
+| `Space` | Toggle Breaking or Sign; include or exclude the selected staged file; protect the final included file | Insert a search space |
 | `Esc` | Cancel application | Close picker and keep existing type |
 | `Ctrl+C` | Cancel application | Cancel application |
 | Printable text | Open Type picker with the character when Type is focused; otherwise edit focused text field | Filter choices |
@@ -102,4 +102,4 @@ On cancel, restore the terminal and return success without invoking Git. On vali
 
 ## Staged-change context
 
-Before the form opens, cocommit captures a read-only snapshot of the Git index. The expanded layout shows the staged-file total, `A/M/D/R` counts, insertion/deletion totals, binary-file count when applicable, and a bounded scrollable list. File names are rendered safely even when they contain unusual characters. The compact layout shows only the aggregate summary. The snapshot is explicitly labeled and is not refreshed while the form is open; Git remains the authority if the index changes before submission.
+Before the form opens, cocommit captures the Git index. The expanded layout shows the staged-file total, `A/M/D/R` counts, insertion/deletion totals, binary-file count when applicable, and a bounded scrollable list with a visible selected file and inclusion checkbox. File names are rendered safely even when they contain unusual characters. `Space` changes that checkbox without invoking Git. On submission, cocommit removes every excluded file from the index without changing its working-tree content, then commits the remaining files. A rename passes both paths. If it is the final included file, the operation is blocked with `Cannot unstage the last staged file`. The compact layout shows the aggregate summary with the selected-file position and places Preview directly below the form rows it renders.
