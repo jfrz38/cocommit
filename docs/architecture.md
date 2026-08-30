@@ -47,8 +47,8 @@ tests/
 | `cli.rs` | Parses the small command-line contract and provides usage text without terminal or Git dependencies. |
 | `commit.rs` | Defines the commit draft, canonical rendering, and validation. Has no terminal or Git dependency. |
 | `config.rs` | Defines defaults, resolves the global path, reads and parses TOML. |
-| `git.rs` | Runs explicit Git commands, interprets exit statuses, and constructs `git commit` arguments. |
-| `app.rs` | Holds editable form state, focus, popup state, validation feedback, and state transitions. |
+| `git.rs` | Runs explicit Git commands, interprets exit statuses, constructs `git commit` arguments, and reads the staged-index snapshot. |
+| `app.rs` | Holds editable form state, the read-only staged snapshot, focus, popup state, validation feedback, and state transitions. |
 | `event.rs` | Maps Crossterm events to small application actions. |
 | `ui.rs` | Renders the form, preview, type picker, status, and footer from `App`. |
 | `terminal.rs` | Owns raw mode, alternate screen, cursor restoration, panic and Unix-signal cleanup, and the synchronous event loop boundary. |

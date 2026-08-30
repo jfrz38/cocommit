@@ -23,6 +23,8 @@ Run preflight before initializing the TUI:
 ```bash
 git rev-parse --is-inside-work-tree
 git diff --cached --quiet
+git diff --cached --name-status -z --find-renames
+git diff --cached --numstat -z --find-renames
 ```
 
 Interpretation:
@@ -36,6 +38,8 @@ Interpretation:
 | `diff --cached --quiet` exits otherwise | Git failure | Identify the command and preserve Git stderr. |
 
 This naturally supports Git worktrees and subdirectories because Git resolves repository context. Bare repositories are rejected because `--is-inside-work-tree` is not `true`.
+
+After staged changes are confirmed, cocommit reads a display-only snapshot with NUL-delimited `--name-status` and `--numstat` output. This avoids shell parsing and preserves file-record boundaries for spaces, tabs, newlines, Unicode, and renames. Terminal rendering escapes control characters in names. The snapshot is not refreshed while the form is open, and neither command changes the index.
 
 The index can change after preflight. Git remains authoritative and may still reject the commit.
 

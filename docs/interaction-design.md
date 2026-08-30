@@ -13,7 +13,11 @@ The interface remains compact and needs no mouse support.
 │ Issue                                     │
 │ Sign (-S)  [ ]                            │
 │                                            │
-│               [ Commit ]                  │
+│ Staged changes (snapshot)                  │
+│ 3 files  A:1 M:1 D:0 R:1  +12 -4           │
+│ M src/app.rs                               │
+│ R docs/guide.md -> docs/usage.md           │
+│               [ Commit ]                   │
 ├─ Preview ─────────────────────────────────┤
 │ feat                                       │
 ├─ Error ───────────────────────────────────┤
@@ -32,10 +36,10 @@ The full bordered layout is used when space allows. Smaller terminals use compac
 Focus advances in this order:
 
 ```text
-Type -> Scope -> Breaking -> Message -> Issue -> Sign -> Submit
+Type -> Scope -> Breaking -> Message -> Issue -> Sign -> Staged changes -> Submit
 ```
 
-`Up` and `Down` move backward and forward through fields, respectively, and wrap. `Tab` and `Shift+Tab` provide the same forward and reverse navigation. Typing or pasting while Type is focused opens its popup search. Text input is otherwise active for Scope, Message, and Issue.
+`Up` and `Down` move backward and forward through fields, respectively, and wrap. When Staged changes is focused, they scroll its bounded file list instead; `Home` and `End` move to the first and last item. `Tab` and `Shift+Tab` always move focus. Typing or pasting while Type is focused opens its popup search. Text input is otherwise active for Scope, Message, and Issue.
 
 ## Keyboard behavior
 
@@ -44,6 +48,7 @@ Type -> Scope -> Breaking -> Message -> Issue -> Sign -> Submit
 | `Tab` | Next field | No action |
 | `Shift+Tab` | Previous field | No action |
 | `Up` / `Down` | Previous / next field | Change highlighted item |
+| `Home` / `End` | First / last staged file when focused | Edit search query |
 | `Enter` | Open Type picker, advance text field, or submit from Commit | Select highlighted item |
 | `Ctrl+Enter` | Submit from any field | No action |
 | `F1` | Open or close help | Open or close help |
@@ -94,3 +99,7 @@ On cancel, restore the terminal and return success without invoking Git. On vali
 - Convert contiguous pasted line breaks to one space. Reject NUL, escape, and other control characters, and keep the current value unchanged when a field or paste limit is exceeded.
 - Limit type to 64 characters, scope to 128, message to 512, issue to 20, and a single paste to 4096 characters. Show concise feedback in Error for rejected input.
 - Ignore focus and mouse events in v1.
+
+## Staged-change context
+
+Before the form opens, cocommit captures a read-only snapshot of the Git index. The expanded layout shows the staged-file total, `A/M/D/R` counts, insertion/deletion totals, binary-file count when applicable, and a bounded scrollable list. File names are rendered safely even when they contain unusual characters. The compact layout shows only the aggregate summary. The snapshot is explicitly labeled and is not refreshed while the form is open; Git remains the authority if the index changes before submission.
