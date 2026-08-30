@@ -51,7 +51,7 @@ tests/
 | `app.rs` | Holds editable form state, focus, popup state, validation feedback, and state transitions. |
 | `event.rs` | Maps Crossterm events to small application actions. |
 | `ui.rs` | Renders the form, preview, type picker, status, and footer from `App`. |
-| `terminal.rs` | Owns raw mode, alternate screen, cursor restoration, and the synchronous event loop boundary. |
+| `terminal.rs` | Owns raw mode, alternate screen, cursor restoration, panic and Unix-signal cleanup, and the synchronous event loop boundary. |
 
 Dependencies point inward:
 
@@ -135,3 +135,5 @@ parse CLI -> verify interactive streams -> preflight Git -> load config -> initi
 The terminal is restored before invoking Git. This is essential for hooks, signing prompts, pinentry, and normal Git output.
 
 Help and version exit before the interactive-stream and Git checks. Usage errors exit before terminal initialization. The executable maps usage errors to exit code `2`, while operational failures use `1` and successful cancellation uses `0`.
+
+Terminal restoration is global and idempotent while raw mode is active. This lets normal cleanup, partial initialization errors, the panic hook, and supported Unix termination signals use the same recovery routine without hiding a panic's original report.
