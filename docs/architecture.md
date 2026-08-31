@@ -124,7 +124,7 @@ pub enum AppAction {
 }
 ```
 
-`FormState` contains the editable text widgets and converts them into `CommitDraft`. It may use `tui-input` to preserve Unicode-aware cursor behavior without leaking UI concerns into the domain model.
+`FormState` contains the editable header widgets, multiline body, and ordered `Footer` values, then converts them into `CommitDraft`. The footer modal is UI state only; preview and submission still use the domain renderer.
 
 ## Main flow
 
@@ -137,7 +137,7 @@ parse CLI -> verify interactive streams -> preflight Git -> load config -> initi
 
 The terminal is restored before invoking Git. This is essential for hooks, signing prompts, pinentry, and normal Git output.
 
-Before loading repository configuration, `main` asks Git for the work-tree root. `config` merges built-in defaults, global preferences, and the root `.cocommit.toml` policy without depending on terminal rendering or message formatting. The effective message policy is intentionally not consumed by the current domain model until Iteration 17; this preserves one active validation and formatting path.
+Before loading repository configuration, `main` asks Git for the work-tree root. `config` merges built-in defaults, global preferences, and the root `.cocommit.toml` policy without depending on terminal rendering or message formatting. The UI displays the effective subject policy as guidance, while the domain model does not enforce any policy until Iteration 17; this preserves one active validation and formatting path.
 
 Help and version exit before the interactive-stream and Git checks. Usage errors exit before terminal initialization. The executable maps usage errors to exit code `2`, while operational failures use `1` and successful cancellation uses `0`.
 
