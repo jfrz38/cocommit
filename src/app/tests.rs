@@ -1,5 +1,6 @@
 use super::*;
 use crate::commit::{DraftField, ValidationErrorKind};
+use crate::config::UiSections;
 
 fn focus(app: &mut App, target: Focus) {
     while app.focus != target {
@@ -51,6 +52,97 @@ fn back_tab_cycles_in_reverse() {
         app.handle(AppEvent::BackTab);
         assert_eq!(app.focus, target);
     }
+}
+
+#[test]
+fn every_section_combination_has_a_complete_focus_path() {
+    for flags in 0..16 {
+        let sections = UiSections {
+            staged_changes: flags & 1 != 0,
+            body: flags & 2 != 0,
+            footers: flags & 4 != 0,
+            issue: flags & 8 != 0,
+        };
+        let mut app = App::new(false).with_sections(sections);
+        let expected = app.visible_focuses();
+
+        for target in expected
+            .iter()
+            .copied()
+            .cycle()
+            .skip(1)
+            .take(expected.len())
+        {
+            app.handle(AppEvent::Tab);
+            assert_eq!(app.focus, target, "failed configuration {flags:04b}");
+        }
+        assert_eq!(
+            app.focus,
+            Focus::CommitType,
+            "failed configuration {flags:04b}"
+        );
+    }
+}
+
+#[test]
+fn hidden_optional_sections_are_absent_from_draft_and_interaction() {
+    let sections = UiSections {
+        staged_changes: true,
+        body: false,
+        footers: false,
+        issue: false,
+    };
+    let mut app = App::new(false).with_sections(sections);
+    app.form.body = Input::new("must not render".to_owned());
+    app.form.issue = Input::new("42".to_owned());
+    app.form.footers = vec![Footer::new("Closes".to_owned(), "#42".to_owned())];
+    app = app.with_sections(sections);
+
+    assert_eq!(
+        app.visible_focuses(),
+        vec![
+            Focus::CommitType,
+            Focus::Scope,
+            Focus::Breaking,
+            Focus::Message,
+            Focus::Sign,
+            Focus::StagedChanges,
+            Focus::Preview,
+            Focus::Submit,
+        ]
+    );
+    assert_eq!(app.preview(), "feat: ");
+    assert!(app.form.body.to_string().is_empty());
+    assert!(app.form.issue.to_string().is_empty());
+    assert!(app.form.footers.is_empty());
+}
+
+#[test]
+fn hidden_staged_changes_keep_all_files_committable_without_exclusions() {
+    let mut app = App::new(false).with_sections(UiSections {
+        staged_changes: false,
+        ..UiSections::default()
+    });
+    app.set_staged_changes(crate::git::StagedChanges {
+        files: vec![
+            crate::git::StagedFile::for_display(
+                crate::git::StagedChangeKind::Added,
+                "one.txt",
+                None,
+            ),
+            crate::git::StagedFile::for_display(
+                crate::git::StagedChangeKind::Modified,
+                "two.txt",
+                None,
+            ),
+        ],
+        ..Default::default()
+    });
+
+    assert!(!app.visible_focuses().contains(&Focus::StagedChanges));
+    assert_eq!(app.included_staged_count(), 2);
+    assert!(app.excluded_staged_files().is_empty());
+    assert!(!app.staged_file_is_included(0));
 }
 
 #[test]

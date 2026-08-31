@@ -4,7 +4,10 @@ use tui_input::{Input, InputRequest};
 
 use crate::{
     commit::{CommitDraft, DraftField, Footer, ValidationError, ValidationErrorKind},
-    config::{Capitalization, DEFAULT_TYPES, MessagePolicy, SubjectPolicy, TerminalPunctuation},
+    config::{
+        Capitalization, DEFAULT_TYPES, MessagePolicy, SubjectPolicy, TerminalPunctuation,
+        UiSections,
+    },
     git::{StagedChanges, StagedFile},
 };
 
@@ -87,15 +90,19 @@ pub struct FormState {
 }
 
 impl FormState {
-    fn draft(&self) -> Result<CommitDraft, Vec<ValidationError>> {
+    fn draft(&self, sections: UiSections) -> Result<CommitDraft, Vec<ValidationError>> {
         CommitDraft::from_raw(
             self.commit_type.to_string(),
             Some(self.scope.to_string()),
             self.breaking,
             self.message.to_string(),
-            Some(self.issue.to_string()),
-            Some(self.body.to_string()),
-            self.footers.clone(),
+            sections.issue.then(|| self.issue.to_string()),
+            sections.body.then(|| self.body.to_string()),
+            if sections.footers {
+                self.footers.clone()
+            } else {
+                Vec::new()
+            },
         )
     }
 }
@@ -187,6 +194,7 @@ pub struct App {
     pub focus: Focus,
     pub mode: Mode,
     pub sign: bool,
+    pub sections: UiSections,
     pub staged_changes: StagedChanges,
     pub staged_selected: usize,
     pub footer_selected: usize,
@@ -220,6 +228,7 @@ impl App {
             focus: Focus::CommitType,
             mode: Mode::Form,
             sign,
+            sections: UiSections::default(),
             staged_changes: StagedChanges::default(),
             staged_selected: 0,
             footer_selected: 0,
@@ -234,10 +243,45 @@ impl App {
         }
     }
 
-    /// Shows the resolved repository convention without enforcing it before Iteration 17.
+    /// Shows the resolved repository convention without enforcing it before Iteration 18.
     pub fn with_message_policy(mut self, policy: &MessagePolicy) -> Self {
         self.subject_policy = policy.subject.clone();
         self
+    }
+
+    pub fn with_sections(mut self, sections: UiSections) -> Self {
+        self.sections = sections;
+        if !sections.body {
+            self.form.body = Input::default();
+        }
+        if !sections.footers {
+            self.form.footers.clear();
+        }
+        if !sections.issue {
+            self.form.issue = Input::default();
+        }
+        self.staged_included.clear();
+        self.ensure_visible_focus();
+        self
+    }
+
+    pub fn visible_focuses(&self) -> Vec<Focus> {
+        [
+            Some(Focus::CommitType),
+            Some(Focus::Scope),
+            Some(Focus::Breaking),
+            Some(Focus::Message),
+            self.sections.body.then_some(Focus::Body),
+            self.sections.footers.then_some(Focus::Footers),
+            self.sections.issue.then_some(Focus::Issue),
+            Some(Focus::Sign),
+            self.sections.staged_changes.then_some(Focus::StagedChanges),
+            Some(Focus::Preview),
+            Some(Focus::Submit),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
     }
 
     pub fn subject_indicator(&self) -> String {
@@ -268,13 +312,17 @@ impl App {
     }
 
     pub fn draft(&self) -> Result<CommitDraft, Vec<ValidationError>> {
-        self.form.draft()
+        self.form.draft(self.sections)
     }
 
     pub fn set_staged_changes(&mut self, staged_changes: StagedChanges) {
         self.staged_changes = staged_changes;
         self.staged_selected = 0;
-        self.staged_included = vec![true; self.staged_changes.files.len()];
+        self.staged_included = if self.sections.staged_changes {
+            vec![true; self.staged_changes.files.len()]
+        } else {
+            Vec::new()
+        };
     }
 
     /// Synchronizes preview scroll limits calculated from the current terminal viewport.
@@ -287,10 +335,13 @@ impl App {
     }
 
     pub fn staged_file_is_included(&self, index: usize) -> bool {
-        self.staged_included.get(index).copied().unwrap_or(false)
+        self.sections.staged_changes && self.staged_included.get(index).copied().unwrap_or(false)
     }
 
     pub fn included_staged_count(&self) -> usize {
+        if !self.sections.staged_changes {
+            return self.staged_changes.files.len();
+        }
         self.staged_included
             .iter()
             .filter(|included| **included)
@@ -298,6 +349,9 @@ impl App {
     }
 
     pub fn excluded_staged_files(&self) -> Vec<StagedFile> {
+        if !self.sections.staged_changes {
+            return Vec::new();
+        }
         self.staged_changes
             .files
             .iter()
@@ -315,8 +369,14 @@ impl App {
 
     /// Renders the current form state without requiring it to be valid for submission.
     pub fn preview(&self) -> String {
-        let issue = CommitDraft::parse_issue(&self.form.issue.to_string())
-            .ok()
+        let issue = self
+            .sections
+            .issue
+            .then(|| {
+                CommitDraft::parse_issue(&self.form.issue.to_string())
+                    .ok()
+                    .flatten()
+            })
             .flatten();
         CommitDraft::new(
             self.form.commit_type.to_string(),
@@ -324,8 +384,12 @@ impl App {
             self.form.breaking,
             self.form.message.to_string(),
             issue,
-            Some(self.form.body.to_string()),
-            self.form.footers.clone(),
+            self.sections.body.then(|| self.form.body.to_string()),
+            if self.sections.footers {
+                self.form.footers.clone()
+            } else {
+                Vec::new()
+            },
         )
         .render_message()
     }
@@ -423,9 +487,10 @@ impl App {
     }
 
     fn handle_form(&mut self, event: AppEvent) -> AppAction {
+        self.ensure_visible_focus();
         match event {
-            AppEvent::Tab => self.focus = self.focus.next(),
-            AppEvent::BackTab => self.focus = self.focus.previous(),
+            AppEvent::Tab => self.focus = self.next_focus(),
+            AppEvent::BackTab => self.focus = self.previous_focus(),
             AppEvent::Down if self.focus == Focus::StagedChanges => self.move_staged(1),
             AppEvent::Up if self.focus == Focus::StagedChanges => self.move_staged(-1),
             AppEvent::Down if self.focus == Focus::Footers => self.move_footer_selection(1),
@@ -443,8 +508,8 @@ impl App {
             AppEvent::Edit(Edit::End) if self.focus == Focus::Preview => {
                 self.preview_scroll = self.preview_scroll_limit
             }
-            AppEvent::Down => self.focus = self.focus.next(),
-            AppEvent::Up => self.focus = self.focus.previous(),
+            AppEvent::Down => self.focus = self.next_focus(),
+            AppEvent::Up => self.focus = self.previous_focus(),
             AppEvent::Edit(Edit::Home) if self.focus == Focus::StagedChanges => {
                 self.staged_selected = 0;
             }
@@ -453,8 +518,7 @@ impl App {
             }
             AppEvent::Enter => match self.focus {
                 Focus::CommitType => self.open_picker(),
-                Focus::Scope => self.focus = Focus::Breaking,
-                Focus::Message => self.focus = Focus::Body,
+                Focus::Scope | Focus::Message | Focus::Issue => self.focus = self.next_focus(),
                 Focus::Body => self.edit_form(Edit::Insert('\n')),
                 Focus::Footers => {
                     if self.form.footers.is_empty() {
@@ -463,7 +527,6 @@ impl App {
                         self.open_footer_editor(Some(self.footer_selected));
                     }
                 }
-                Focus::Issue => self.focus = Focus::Sign,
                 Focus::Submit => return self.submit(),
                 Focus::Preview => self.mode = Mode::PreviewExpanded,
                 Focus::Breaking | Focus::Sign | Focus::StagedChanges => {}
@@ -577,6 +640,9 @@ impl App {
     }
 
     fn open_footer_name_picker(&mut self) {
+        if !self.sections.footers {
+            return;
+        }
         if self.form.footers.len() >= MAX_FOOTERS {
             self.input_error = Some("Too many footers");
             return;
@@ -611,6 +677,9 @@ impl App {
     }
 
     fn open_footer_editor(&mut self, index: Option<usize>) {
+        if !self.sections.footers {
+            return;
+        }
         if index.is_none() && self.form.footers.len() >= MAX_FOOTERS {
             self.input_error = Some("Too many footers");
             return;
@@ -780,22 +849,22 @@ impl App {
     fn move_footer_selection(&mut self, direction: isize) {
         if self.form.footers.is_empty() {
             self.focus = if direction < 0 {
-                Focus::Body
+                self.previous_focus()
             } else {
-                Focus::Issue
+                self.next_focus()
             };
             return;
         }
         if direction < 0 {
             if self.footer_selected == 0 {
-                self.focus = Focus::Body;
+                self.focus = self.previous_focus();
             } else {
                 self.footer_selected -= 1;
             }
         } else if self.footer_selected + 1 < self.form.footers.len() {
             self.footer_selected += 1;
         } else {
-            self.focus = Focus::Issue;
+            self.focus = self.next_focus();
         }
     }
 
@@ -812,7 +881,7 @@ impl App {
             None => {}
         }
         self.mode = Mode::Form;
-        self.focus = Focus::Scope;
+        self.focus = self.next_focus();
         self.clear_validation_error();
     }
 
@@ -1000,6 +1069,11 @@ impl App {
             Err(errors) => {
                 let error = errors[0];
                 if let DraftField::Footer(index) = error.field {
+                    if !self.sections.footers {
+                        self.focus = Focus::Message;
+                        self.validation_error = Some(error);
+                        return AppAction::Continue;
+                    }
                     self.footer_selected = index.min(self.form.footers.len().saturating_sub(1));
                     self.focus = Focus::Footers;
                     self.open_footer_editor(Some(self.footer_selected));
@@ -1012,7 +1086,12 @@ impl App {
                             };
                     }
                 } else {
-                    self.focus = focus_for(error.field);
+                    let focus = focus_for(error.field);
+                    self.focus = if self.visible_focuses().contains(&focus) {
+                        focus
+                    } else {
+                        Focus::Message
+                    };
                 }
                 self.validation_error = Some(error);
                 AppAction::Continue
@@ -1052,54 +1131,44 @@ impl App {
     fn move_staged(&mut self, direction: isize) {
         if self.staged_changes.files.is_empty() {
             self.focus = if direction < 0 {
-                Focus::Sign
+                self.previous_focus()
             } else {
-                Focus::Submit
+                self.next_focus()
             };
             return;
         }
         let last = self.staged_changes.files.len() - 1;
         if direction < 0 && self.staged_selected == 0 {
-            self.focus = Focus::Sign;
+            self.focus = self.previous_focus();
         } else if direction > 0 && self.staged_selected == last {
-            self.focus = Focus::Preview;
+            self.focus = self.next_focus();
         } else {
             self.staged_selected =
                 (self.staged_selected as isize + direction).clamp(0, last as isize) as usize;
         }
     }
-}
-
-impl Focus {
-    fn next(self) -> Self {
-        match self {
-            Self::CommitType => Self::Scope,
-            Self::Scope => Self::Breaking,
-            Self::Breaking => Self::Message,
-            Self::Message => Self::Body,
-            Self::Body => Self::Footers,
-            Self::Footers => Self::Issue,
-            Self::Issue => Self::Sign,
-            Self::Sign => Self::StagedChanges,
-            Self::StagedChanges => Self::Preview,
-            Self::Preview => Self::Submit,
-            Self::Submit => Self::CommitType,
-        }
+    fn next_focus(&self) -> Focus {
+        let focuses = self.visible_focuses();
+        let index = focuses
+            .iter()
+            .position(|focus| *focus == self.focus)
+            .unwrap_or(0);
+        focuses[(index + 1) % focuses.len()]
     }
 
-    fn previous(self) -> Self {
-        match self {
-            Self::CommitType => Self::Submit,
-            Self::Scope => Self::CommitType,
-            Self::Breaking => Self::Scope,
-            Self::Message => Self::Breaking,
-            Self::Body => Self::Message,
-            Self::Footers => Self::Body,
-            Self::Issue => Self::Footers,
-            Self::Sign => Self::Issue,
-            Self::StagedChanges => Self::Sign,
-            Self::Preview => Self::StagedChanges,
-            Self::Submit => Self::Preview,
+    fn previous_focus(&self) -> Focus {
+        let focuses = self.visible_focuses();
+        let index = focuses
+            .iter()
+            .position(|focus| *focus == self.focus)
+            .unwrap_or(0);
+        focuses[(index + focuses.len() - 1) % focuses.len()]
+    }
+
+    fn ensure_visible_focus(&mut self) {
+        if !self.visible_focuses().contains(&self.focus) {
+            self.focus = Focus::CommitType;
+            self.mode = Mode::Form;
         }
     }
 }

@@ -4,7 +4,7 @@ use tui_input::Input;
 use super::*;
 use crate::{
     commit::Footer,
-    config::{Capitalization, MessagePolicy, SubjectPolicy, TerminalPunctuation},
+    config::{Capitalization, MessagePolicy, SubjectPolicy, TerminalPunctuation, UiSections},
 };
 
 fn draw(app: &App, width: u16, height: u16) {
@@ -32,6 +32,98 @@ fn rendered(app: &App, width: u16, height: u16) -> String {
 fn renders_form_at_normal_terminal_size() {
     let app = App::new(false);
     draw(&app, 100, 40);
+}
+
+#[test]
+fn footer_hint_always_describes_space_as_toggle() {
+    assert_eq!(
+        footer_hint(),
+        "F1 Help  |  Up/Down Navigate  |  Space Toggle  |  Ctrl+Enter Commit  |  Esc Cancel"
+    );
+}
+
+#[test]
+fn hidden_sections_consume_no_space_or_expose_actions() {
+    let mut app = App::new(false).with_sections(UiSections {
+        staged_changes: false,
+        body: false,
+        footers: false,
+        issue: false,
+    });
+    app.handle(crate::app::AppEvent::Help);
+
+    for (width, height) in [(100, 40), (40, 12)] {
+        let output = rendered(&app, width, height);
+        for hidden_label in [
+            "Body",
+            "Footers",
+            "Issue",
+            "Staged",
+            "Add footer",
+            "BREAKING CHANGE",
+        ] {
+            assert!(
+                !output.contains(hidden_label),
+                "{hidden_label} should be hidden at {width}x{height}"
+            );
+        }
+    }
+}
+
+#[test]
+fn each_hidden_section_is_absent_in_both_layouts() {
+    for (sections, hidden_label) in [
+        (
+            UiSections {
+                staged_changes: false,
+                ..UiSections::default()
+            },
+            "Staged",
+        ),
+        (
+            UiSections {
+                body: false,
+                ..UiSections::default()
+            },
+            "Body",
+        ),
+        (
+            UiSections {
+                footers: false,
+                ..UiSections::default()
+            },
+            "Footers",
+        ),
+        (
+            UiSections {
+                issue: false,
+                ..UiSections::default()
+            },
+            "Issue",
+        ),
+    ] {
+        let app = App::new(false).with_sections(sections);
+        for (width, height) in [(100, 40), (40, 12)] {
+            assert!(
+                !rendered(&app, width, height).contains(hidden_label),
+                "{hidden_label} should be hidden at {width}x{height}"
+            );
+        }
+    }
+}
+
+#[test]
+fn renders_every_section_combination_in_expanded_and_compact_layouts() {
+    for flags in 0..16 {
+        let app = App::new(false).with_sections(UiSections {
+            staged_changes: flags & 1 != 0,
+            body: flags & 2 != 0,
+            footers: flags & 4 != 0,
+            issue: flags & 8 != 0,
+        });
+        draw(&app, 100, 40);
+        draw(&app, 40, 12);
+    }
 }
 
 #[test]

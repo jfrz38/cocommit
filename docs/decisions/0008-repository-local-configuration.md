@@ -23,7 +23,7 @@ Scalars and nested fields override only when present. Lists replace the precedin
 
 Global configuration owns `[ui]` preferences, including `sign`. Repository configuration owns only `[message]` policy. The legacy global `sign = true|false` format remains supported when `schema_version` is absent. New configuration uses `schema_version = 1`; unknown versions, unknown keys, mixed legacy/new global syntax, and message policy without a schema version fail with the file path and source error. Files are never rewritten or migrated automatically.
 
-Message policy records configurable allowed types, scope suggestions, subject policies, and decimal issue identifier prefix/rendering style. Scope rendering remains the Conventional Commits `()` syntax only. Iteration 14 does not yet apply this policy to the picker, validation, preview, or Git message; Iteration 17 will do so through the single domain renderer and validator.
+Message policy records configurable allowed types, scope suggestions, subject policies, and decimal issue identifier prefix/rendering style. Scope rendering remains the Conventional Commits `()` syntax only. Iteration 14 does not yet apply this policy to the picker, validation, preview, or Git message; Iteration 18 will do so through the single domain renderer and validator.
 
 ## Consequences
 

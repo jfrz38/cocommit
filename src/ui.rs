@@ -20,8 +20,6 @@ const MIN_HEIGHT: u16 = 8;
 const EXPANDED_WIDTH: u16 = 50;
 const EXPANDED_HEIGHT: u16 = 39;
 const EXPANDED_HEIGHT_WITH_STATUS: u16 = 42;
-const COMPACT_FORM_ROWS: u16 = 11;
-const FOOTER: &str = "F1 Help  Up/Down Navigate  A Add footer  Ctrl+Enter Commit  Esc Cancel";
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PreviewScrollLimits {
@@ -37,11 +35,16 @@ pub fn render(frame: &mut Frame, app: &App) -> PreviewScrollLimits {
         return PreviewScrollLimits::default();
     }
 
-    let expanded_height = if app.status_message().is_some() {
+    let hidden_height = u16::from(!app.sections.body) * 4
+        + u16::from(!app.sections.footers) * 4
+        + u16::from(!app.sections.issue) * 3
+        + u16::from(!app.sections.staged_changes) * 4;
+    let expanded_height = (if app.status_message().is_some() {
         EXPANDED_HEIGHT_WITH_STATUS
     } else {
         EXPANDED_HEIGHT
-    };
+    })
+    .saturating_sub(hidden_height);
     if area.width >= EXPANDED_WIDTH && area.height >= expanded_height {
         render_expanded(frame, app, area)
     } else {
@@ -54,31 +57,53 @@ fn render_expanded(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLim
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
 
-    let staged_height = inner
-        .height
-        .saturating_sub(33 + 3 * u16::from(app.status_message().is_some()))
-        .clamp(4, 9);
+    let omitted_form_height = u16::from(!app.sections.body) * 4
+        + u16::from(!app.sections.footers) * 4
+        + u16::from(!app.sections.issue) * 3;
+    let staged_height = app.sections.staged_changes.then(|| {
+        inner
+            .height
+            .saturating_sub(
+                33 - omitted_form_height + 3 * u16::from(app.status_message().is_some()),
+            )
+            .clamp(4, 9)
+    });
     let preview_height = inner
         .height
-        .saturating_sub(30 + staged_height + 3 * u16::from(app.status_message().is_some()))
+        .saturating_sub(
+            30 - omitted_form_height - 4 * u16::from(!app.sections.staged_changes)
+                + staged_height.unwrap_or(0)
+                + 3 * u16::from(app.status_message().is_some()),
+        )
         .max(3);
+    let mut constraints = vec![
+        Constraint::Length(3),
+        Constraint::Length(3),
+        Constraint::Length(3),
+        Constraint::Length(3),
+    ];
+    if app.sections.body {
+        constraints.push(Constraint::Length(4));
+    }
+    if app.sections.footers {
+        constraints.push(Constraint::Length(4));
+    }
+    if app.sections.issue {
+        constraints.push(Constraint::Length(3));
+    }
+    constraints.push(Constraint::Length(3));
+    if let Some(staged_height) = staged_height {
+        constraints.push(Constraint::Length(staged_height));
+    }
+    constraints.extend([
+        Constraint::Length(preview_height),
+        Constraint::Length(3),
+        Constraint::Length(if app.status_message().is_some() { 3 } else { 0 }),
+        Constraint::Min(1),
+    ]);
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Length(3),
-            Constraint::Length(3),
-            Constraint::Length(3),
-            Constraint::Length(4),
-            Constraint::Length(4),
-            Constraint::Length(3),
-            Constraint::Length(3),
-            Constraint::Length(staged_height),
-            Constraint::Length(preview_height),
-            Constraint::Length(3),
-            Constraint::Length(if app.status_message().is_some() { 3 } else { 0 }),
-            Constraint::Min(1),
-        ])
+        .constraints(constraints)
         .split(inner);
 
     let mut cursor = None;
@@ -110,41 +135,58 @@ fn render_expanded(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLim
         &app.form.message,
         app.focus == Focus::Message,
     ));
-    cursor = cursor.or(render_text_row(
-        frame,
-        rows[4],
-        "Body",
-        &app.form.body,
-        app.focus == Focus::Body,
-    ));
-    render_footers(frame, rows[5], app);
-    cursor = cursor.or(render_text_row(
-        frame,
-        rows[6],
-        "Issue",
-        &app.form.issue,
-        app.focus == Focus::Issue,
-    ));
+    let mut row = 4;
+    if app.sections.body {
+        cursor = cursor.or(render_text_row(
+            frame,
+            rows[row],
+            "Body",
+            &app.form.body,
+            app.focus == Focus::Body,
+        ));
+        row += 1;
+    }
+    if app.sections.footers {
+        render_footers(frame, rows[row], app);
+        row += 1;
+    }
+    if app.sections.issue {
+        cursor = cursor.or(render_text_row(
+            frame,
+            rows[row],
+            "Issue",
+            &app.form.issue,
+            app.focus == Focus::Issue,
+        ));
+        row += 1;
+    }
     render_toggle_row(
         frame,
-        rows[7],
+        rows[row],
         "Sign commit",
         app.sign,
         app.focus == Focus::Sign,
     );
-    render_staged_changes(frame, rows[8], app);
+    row += 1;
+    if app.sections.staged_changes {
+        render_staged_changes(frame, rows[row], app);
+        row += 1;
+    }
     let form_preview_limit = render_preview(
         frame,
-        rows[9],
+        rows[row],
         &app.preview(),
         app.focus == Focus::Preview,
         app.preview_scroll,
     );
-    render_submit_row(frame, rows[10], app.focus == Focus::Submit);
+    row += 1;
+    render_submit_row(frame, rows[row], app.focus == Focus::Submit);
+    row += 1;
     if let Some(status) = app.status_message() {
-        render_status(frame, rows[11], status, app.status_is_error());
+        render_status(frame, rows[row], status, app.status_is_error());
     }
-    render_footer(frame, rows[12]);
+    row += 1;
+    render_footer(frame, rows[row]);
 
     if let Mode::TypePicker(picker) = &app.mode {
         cursor = render_picker(frame, area, picker);
@@ -169,7 +211,7 @@ fn render_expanded(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLim
         cursor = None;
     }
     if matches!(app.mode, Mode::Help(_)) {
-        render_help(frame, area);
+        render_help(frame, area, app);
         cursor = None;
     }
 
@@ -198,14 +240,15 @@ fn render_compact(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLimi
     frame.render_widget(outer, area);
 
     let status_height = u16::from(app.status_message().is_some());
+    let focus_count = app.visible_focuses().len() as u16;
     let preview_height = inner
         .height
-        .saturating_sub(COMPACT_FORM_ROWS + status_height + 1)
+        .saturating_sub(focus_count + status_height + 1)
         .clamp(1, 6);
     let form_height = inner
         .height
         .saturating_sub(preview_height + status_height + 1)
-        .clamp(1, COMPACT_FORM_ROWS);
+        .clamp(1, focus_count);
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -216,16 +259,26 @@ fn render_compact(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLimi
         ])
         .split(inner);
 
-    let scroll = focus_index(app.focus).saturating_sub(usize::from(form_height.saturating_sub(1)));
+    let focuses = app.visible_focuses();
+    let focus_index = focuses
+        .iter()
+        .position(|focus| *focus == app.focus)
+        .unwrap_or(0);
+    let scroll = focus_index.saturating_sub(usize::from(form_height.saturating_sub(1)));
     let mut cursor = None;
-    for index in scroll..(scroll + usize::from(form_height)).min(11) {
+    for (offset, focus) in focuses
+        .iter()
+        .enumerate()
+        .skip(scroll)
+        .take(usize::from(form_height))
+    {
         let row = Rect::new(
             rows[0].x,
-            rows[0].y + (index - scroll) as u16,
+            rows[0].y + (offset - scroll) as u16,
             rows[0].width,
             1,
         );
-        cursor = cursor.or(render_compact_row(frame, row, app, index));
+        cursor = cursor.or(render_compact_row(frame, row, app, *focus));
     }
 
     let form_preview_limit = render_preview(
@@ -247,7 +300,7 @@ fn render_compact(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLimi
         );
     }
     frame.render_widget(
-        Paragraph::new(FOOTER)
+        Paragraph::new(footer_hint())
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true }),
         rows[3],
@@ -276,7 +329,7 @@ fn render_compact(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLimi
         cursor = None;
     }
     if matches!(app.mode, Mode::Help(_)) {
-        render_help(frame, area);
+        render_help(frame, area, app);
         cursor = None;
     }
     if let Some(position) = cursor {
@@ -288,50 +341,49 @@ fn render_compact(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLimi
     }
 }
 
-fn render_compact_row(frame: &mut Frame, area: Rect, app: &App, index: usize) -> Option<Position> {
-    let (label, input, toggle, focused) = match index {
-        0 => (
+fn render_compact_row(frame: &mut Frame, area: Rect, app: &App, focus: Focus) -> Option<Position> {
+    let (label, input, toggle, focused) = match focus {
+        Focus::CommitType => (
             "Type",
             Some(&app.form.commit_type),
             None,
             app.focus == Focus::CommitType,
         ),
-        1 => (
+        Focus::Scope => (
             "Scope",
             Some(&app.form.scope),
             None,
             app.focus == Focus::Scope,
         ),
-        2 => (
+        Focus::Breaking => (
             "Breaking",
             None,
             Some(app.form.breaking),
             app.focus == Focus::Breaking,
         ),
-        3 => (
+        Focus::Message => (
             "Message",
             Some(&app.form.message),
             None,
             app.focus == Focus::Message,
         ),
-        4 => ("Body", Some(&app.form.body), None, app.focus == Focus::Body),
-        5 => ("Footers", None, None, app.focus == Focus::Footers),
-        6 => (
+        Focus::Body => ("Body", Some(&app.form.body), None, app.focus == Focus::Body),
+        Focus::Footers => ("Footers", None, None, app.focus == Focus::Footers),
+        Focus::Issue => (
             "Issue",
             Some(&app.form.issue),
             None,
             app.focus == Focus::Issue,
         ),
-        7 => (
+        Focus::Sign => (
             "Sign commit",
             None,
             Some(app.sign),
             app.focus == Focus::Sign,
         ),
-        8 => ("Staged", None, None, app.focus == Focus::StagedChanges),
-        9 => ("Preview", None, None, app.focus == Focus::Preview),
-        10 => ("", None, None, app.focus == Focus::Submit),
-        _ => return None,
+        Focus::StagedChanges => ("Staged", None, None, app.focus == Focus::StagedChanges),
+        Focus::Preview => ("Preview", None, None, app.focus == Focus::Preview),
+        Focus::Submit => ("", None, None, app.focus == Focus::Submit),
     };
     let style = focused_style(focused);
     let staged_position = if app.staged_changes.files.is_empty() {
@@ -341,8 +393,8 @@ fn render_compact_row(frame: &mut Frame, area: Rect, app: &App, index: usize) ->
     };
     let content = match toggle {
         Some(value) => format!("{label:<10} [{}]", if value { "x" } else { " " }),
-        None if index == 10 => "[ Commit ]".to_owned(),
-        None if index == 5 => format!(
+        None if focus == Focus::Submit => "[ Commit ]".to_owned(),
+        None if focus == Focus::Footers => format!(
             "{label:<10} {}/{}  A add  Enter edit  Delete remove",
             if app.form.footers.is_empty() {
                 0
@@ -351,7 +403,7 @@ fn render_compact_row(frame: &mut Frame, area: Rect, app: &App, index: usize) ->
             },
             app.form.footers.len()
         ),
-        None if index == 8 => format!(
+        None if focus == Focus::StagedChanges => format!(
             "{label} {}/{} +{} -{} #{}/{}",
             app.included_staged_count(),
             app.staged_changes.files.len(),
@@ -360,13 +412,13 @@ fn render_compact_row(frame: &mut Frame, area: Rect, app: &App, index: usize) ->
             staged_position,
             app.staged_changes.files.len(),
         ),
-        None if index == 9 => format!("{label:<10} scroll {}", app.preview_scroll),
+        None if focus == Focus::Preview => format!("{label:<10} scroll {}", app.preview_scroll),
         None => format!("{label:<10}"),
     };
     frame.render_widget(
         Paragraph::new(content)
             .style(style)
-            .alignment(if index == 10 {
+            .alignment(if focus == Focus::Submit {
                 Alignment::Center
             } else {
                 Alignment::Left
@@ -400,22 +452,6 @@ fn render_compact_row(frame: &mut Frame, area: Rect, app: &App, index: usize) ->
                 area.y,
             )
         })
-}
-
-fn focus_index(focus: Focus) -> usize {
-    match focus {
-        Focus::CommitType => 0,
-        Focus::Scope => 1,
-        Focus::Breaking => 2,
-        Focus::Message => 3,
-        Focus::Body => 4,
-        Focus::Footers => 5,
-        Focus::Issue => 6,
-        Focus::Sign => 7,
-        Focus::StagedChanges => 8,
-        Focus::Preview => 9,
-        Focus::Submit => 10,
-    }
 }
 
 fn render_text_row(
@@ -711,14 +747,18 @@ fn render_status(frame: &mut Frame, area: Rect, status: &str, is_error: bool) {
 
 fn render_footer(frame: &mut Frame, area: Rect) {
     frame.render_widget(
-        Paragraph::new(FOOTER)
+        Paragraph::new(footer_hint())
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true }),
         area,
     );
 }
 
-fn render_help(frame: &mut Frame, area: Rect) {
+fn footer_hint() -> &'static str {
+    "F1 Help  |  Up/Down Navigate  |  Space Toggle  |  Ctrl+Enter Commit  |  Esc Cancel"
+}
+
+fn render_help(frame: &mut Frame, area: Rect, app: &App) {
     let width = area.width.saturating_sub(4).min(64);
     let height = area.height.saturating_sub(2).min(16);
     let popup = Rect::new(
@@ -729,18 +769,68 @@ fn render_help(frame: &mut Frame, area: Rect) {
     );
     frame.render_widget(Clear, popup);
     frame.render_widget(
-        Paragraph::new(
-            "Keyboard help\n\nUp / Down        Move between fields; select footers or staged files\nTab / Shift+Tab  Next / previous field or footer-editor control\nEnter            Type picker; newline in body/footer value; edit footer\nA                Open footer-name picker\nSpace            Toggle Breaking or Sign; add BREAKING CHANGE in Footers\nDelete           Remove selected footer\nCtrl+Up/Down     Reorder selected footer\nCtrl+Enter       Commit form or save footer\nEsc              Close popup or cancel\nCtrl+C           Cancel application\nF1               Open or close help",
-        )
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Help ")
-                .border_style(focused_style(true)),
-        )
-        .wrap(Wrap { trim: true }),
+        Paragraph::new(help_text(app))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(" Help ")
+                    .border_style(focused_style(true)),
+            )
+            .wrap(Wrap { trim: true }),
         popup,
     );
+}
+
+fn help_text(app: &App) -> String {
+    let mut lines = vec![
+        "Keyboard help".to_owned(),
+        String::new(),
+        format!(
+            "Up / Down        Move between fields{}{}",
+            if app.sections.footers {
+                "; select footers"
+            } else {
+                ""
+            },
+            if app.sections.staged_changes {
+                " or staged files"
+            } else {
+                ""
+            },
+        ),
+        format!(
+            "Tab / Shift+Tab  Next / previous field{}",
+            if app.sections.footers {
+                " or footer-editor control"
+            } else {
+                ""
+            }
+        ),
+        format!(
+            "Enter            Type picker{}; open preview",
+            if app.sections.body {
+                "; newline in body"
+            } else {
+                ""
+            }
+        ),
+        "Space            Toggle Breaking or Sign".to_owned(),
+    ];
+    if app.sections.footers {
+        lines.extend([
+            "A                Open footer-name picker".to_owned(),
+            "Space in Footers Add BREAKING CHANGE".to_owned(),
+            "Delete           Remove selected footer".to_owned(),
+            "Ctrl+Up/Down     Reorder selected footer".to_owned(),
+        ]);
+    }
+    lines.extend([
+        "Ctrl+Enter       Commit form or save footer".to_owned(),
+        "Esc              Close popup or cancel".to_owned(),
+        "Ctrl+C           Cancel application".to_owned(),
+        "F1               Open or close help".to_owned(),
+    ]);
+    lines.join("\n")
 }
 
 fn render_picker(frame: &mut Frame, area: Rect, picker: &TypePickerState) -> Option<Position> {

@@ -1,8 +1,8 @@
 use std::fs;
 
 use super::{
-    Capitalization, Config, IssueStyle, TerminalPunctuation, global_config_path, load_from_paths,
-    repository_config_path,
+    Capitalization, Config, IssueStyle, TerminalPunctuation, UiSections, global_config_path,
+    load_from_paths, repository_config_path,
 };
 
 #[test]
@@ -10,10 +10,57 @@ fn defaults_preserve_the_existing_signing_and_message_behavior() {
     let config = Config::default();
 
     assert!(config.ui.sign);
+    assert_eq!(config.ui.sections, UiSections::default());
     assert_eq!(config.message.types[0], "feat");
     assert!(config.message.scope_suggestions.is_empty());
     assert_eq!(config.message.issue.prefix, "#");
     assert_eq!(config.message.issue.style, IssueStyle::Parenthesized);
+}
+
+#[test]
+fn merges_global_section_preferences_by_field() {
+    let directory = tempfile::tempdir().expect("temporary directory should be created");
+    let global = directory.path().join("global.toml");
+    fs::write(
+        &global,
+        "schema_version = 1\n[ui.sections]\nbody = false\nissue = false",
+    )
+    .expect("global configuration should be written");
+
+    let config = load_from_paths(Some(&global), directory.path()).unwrap();
+
+    assert_eq!(
+        config.ui.sections,
+        UiSections {
+            staged_changes: true,
+            body: false,
+            footers: true,
+            issue: false,
+        }
+    );
+}
+
+#[test]
+fn accepts_all_optional_sections_hidden_globally() {
+    let directory = tempfile::tempdir().expect("temporary directory should be created");
+    let global = directory.path().join("global.toml");
+    fs::write(
+        &global,
+        "schema_version = 1\n[ui.sections]\nstaged_changes = false\nbody = false\nfooters = false\nissue = false",
+    )
+    .expect("global configuration should be written");
+
+    let config = load_from_paths(Some(&global), directory.path()).unwrap();
+
+    assert_eq!(
+        config.ui.sections,
+        UiSections {
+            staged_changes: false,
+            body: false,
+            footers: false,
+            issue: false,
+        }
+    );
 }
 
 #[test]
@@ -122,6 +169,7 @@ fn rejects_unknown_keys_at_every_schema_level() {
     for contents in [
         "schema_version = 1\nunknown = true",
         "schema_version = 1\n[ui]\nunknown = true",
+        "schema_version = 1\n[ui.sections]\nunknown = true",
         "schema_version = 1\n[message]\nunknown = true",
         "schema_version = 1\n[message.subject]\nunknown = true",
         "schema_version = 1\n[message.issue]\nunknown = true",
@@ -129,6 +177,19 @@ fn rejects_unknown_keys_at_every_schema_level() {
         fs::write(&global, contents).expect("global configuration should be written");
         assert!(load_from_paths(Some(&global), directory.path()).is_err());
     }
+}
+
+#[test]
+fn rejects_ui_preferences_in_repository_configuration() {
+    let directory = tempfile::tempdir().expect("temporary directory should be created");
+    let repository = repository_config_path(directory.path());
+    fs::write(
+        &repository,
+        "schema_version = 1\n[ui.sections]\nbody = false",
+    )
+    .expect("repository configuration should be written");
+
+    assert!(load_from_paths(None, directory.path()).is_err());
 }
 
 #[test]

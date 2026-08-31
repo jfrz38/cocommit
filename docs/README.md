@@ -18,7 +18,7 @@ Read the documents in this order:
 
 - Initial planning: complete
 - Rust implementation: complete through Phase 9
-- Current work: pre-release roadmap, Iteration 16 awaits its documented manual visual check; Iteration 17 repository policy enforcement follows
+- Current work: pre-release roadmap; Iteration 17 configurable TUI sections is implemented, and Iteration 18 repository policy enforcement follows
 - Release status: private pre-release; no public package or release exists
 - Supported scope: complete Conventional Commit composition from already staged changes
 

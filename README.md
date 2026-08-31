@@ -126,6 +126,21 @@ It is read from `<config-dir>/cocommit/config.toml`:
 
 Missing configuration, or an unavailable platform configuration directory, uses `sign = true`. Set `sign = false` to initialize `Sign commit` as disabled; cocommit then passes `--no-gpg-sign`, overriding Git's `commit.gpgSign` setting for that commit.
 
+Schema-versioned global preferences can hide optional sections while preserving the complete interface by default:
+
+```toml
+schema_version = 1
+
+[ui]
+sign = true
+
+[ui.sections]
+staged_changes = true
+body = true
+footers = true
+issue = true
+```
+
 For repository conventions, add `.cocommit.toml` at the Git work-tree root. cocommit resolves that root through Git, so the same file applies when it runs from a subdirectory or linked worktree. Configuration precedence is built-in defaults, global configuration, then repository configuration; a future CLI layer will be higher priority. UI preferences remain global, while the repository file accepts only message policy:
 
 ```toml
@@ -145,7 +160,9 @@ prefix = "PROJ-"
 style = "plain"
 ```
 
-`types` will become an allowed-type list, while scope suggestions remain non-blocking. Issue identifiers remain decimal numbers; `prefix` and `style` select a closed rendering convention. The Conventional Commits scope syntax is fixed as `type(scope): subject`; `[]` and `<>` are not supported. Iteration 14 loads, validates, and merges this policy, but does not yet change the current picker, validation, preview, or rendered message. Enforcement is scheduled for Iteration 17.
+Every `ui.sections` value defaults to `true`; they are global-only preferences, so repository `.cocommit.toml` files cannot hide an editor. Type, Scope, Breaking, Subject, Sign commit, Preview, and Commit remain visible. With `staged_changes = false`, preflight still requires staged files, but no exclusion or unstage operation is offered and Git commits every file in its index at submission.
+
+`types` will become an allowed-type list, while scope suggestions remain non-blocking. Issue identifiers remain decimal numbers; `prefix` and `style` select a closed rendering convention. The Conventional Commits scope syntax is fixed as `type(scope): subject`; `[]` and `<>` are not supported. Iteration 14 loads, validates, and merges this policy, but does not yet change the current picker, validation, preview, or rendered message. Enforcement is scheduled for Iteration 18.
 
 New configuration files require `schema_version = 1`. The legacy global `sign` form remains supported but cannot be mixed with schema-versioned fields; migrate it manually to `[ui]\nsign = false` before adding policy. Unknown keys, unsupported versions, invalid TOML, and unreadable existing files are reported with their path before the interface opens. cocommit never creates or rewrites configuration files or directories.
 
@@ -169,7 +186,7 @@ After a valid submission, cocommit restores the terminal and runs `git commit` w
 - cocommit does not stage files, render full diffs or history, manage branches, push, or create pull requests.
 - It does not replace Git identity, hooks, credentials, editors, or signing configuration.
 - AI-generated messages, changelog generation, dry runs, copy-only mode, and CLI field prefills are not supported.
-- Repository message policies are loaded but not enforced until Iteration 17; the active form still uses the standard type picker and existing header renderer.
+- Repository message policies are loaded but not enforced until Iteration 18; the active form still uses the standard type picker and existing header renderer.
 
 ## Development
 

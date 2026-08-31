@@ -9,7 +9,7 @@ The roadmap is intentionally split into two horizons:
 1. Work required before the first public `0.1.0` release.
 2. Enhancements that can be delivered after `0.1.0` without weakening the initial release.
 
-No tag, GitHub Release, or public package should be created until Iterations 10 through 22 and the final release gate are complete. Repository visibility is changed only in the final pre-release iteration.
+No tag, GitHub Release, or public package should be created until Iterations 10 through 23 and the final release gate are complete. Repository visibility is changed only in the final pre-release iteration.
 
 ## Product boundary
 
@@ -235,13 +235,36 @@ Completion criteria:
 - The interface remains fully usable without a mouse.
 - Preview output exactly matches the message later passed to Git.
 
-### Iteration 17: Repository policy enforcement
+### Iteration 17: Configurable TUI sections
+
+The complete composer should remain compact for users who do not need every optional workflow. Visibility is a personal global preference, never a repository convention: hiding an editor must not silently change the repository's message policy.
+
+Work:
+
+- Add global `ui.sections` preferences for `staged_changes`, `body`, `footers`, and `issue`.
+- Default every configurable section to visible so an absent configuration preserves the current interface exactly.
+- Keep Type, Scope, Breaking, Subject, Sign commit, Preview, and Commit visible in every configuration.
+- Derive focus order, compact and expanded layouts, help, keyboard hints, and validation routing from the visible sections.
+- Ensure hidden Body, Footers, and Issue start empty, have no editor or shortcut, and cannot receive a validation error or focus.
+- Keep Git preflight mandatory when Staged changes is hidden, but remove file inclusion choices and commit every file that remains staged at submission.
+- Keep `.cocommit.toml` limited to `[message]`; repository configuration must reject `[ui]` and cannot hide a user's controls.
+
+Completion criteria:
+
+- No configuration and all-true preferences reproduce the current layout and navigation.
+- Every combination of the four section preferences has a complete keyboard focus path to Preview and Commit.
+- Hidden sections consume no layout space and expose no row, help entry, key hint, modal, or inactive action.
+- Hidden staged context never constructs an exclusion or unstage operation, while preflight still rejects an empty index.
+- Configuration, application-state, render-smoke, Git-integration, and manual-terminal tests cover the default and hidden-section flows.
+
+### Iteration 18: Repository policy enforcement
 
 Configuration becomes valuable when the form can guide users toward the repository's actual conventions before a hook rejects the commit.
 
 Work:
 
 - Apply configured type, scope, subject, and issue policies during editing and submission.
+- When a configured policy requires an optional message part, expose its editor or report an actionable configuration conflict rather than making compliance impossible.
 - Distinguish required values, allowed values, and non-blocking suggestions.
 - Show active constraints without overcrowding the form.
 - Add a documented, deliberately limited compatibility strategy for common commitlint rules.
@@ -257,7 +280,7 @@ Completion criteria:
 - Hooks still run normally and their output remains native Git output.
 - Policy behavior is covered by domain and application-state tests.
 
-### Iteration 18: Cross-platform quality
+### Iteration 19: Cross-platform quality
 
 Compilation alone is insufficient for a cross-platform TUI. Every advertised platform must execute meaningful tests and produce the binary that will be distributed.
 
@@ -280,7 +303,7 @@ Completion criteria:
 - PTY and manual smoke-test results are recorded for the release candidate.
 - The supported terminal matrix and known limitations are public documentation.
 
-### Iteration 19: Supply-chain hardening
+### Iteration 20: Supply-chain hardening
 
 Release automation must minimize the authority granted to dependencies, third-party Actions, and generated artifacts.
 
@@ -304,7 +327,7 @@ Completion criteria:
 - Artifacts can be matched to checksums and their source workflow.
 - A supply-chain incident has a documented revocation and replacement procedure.
 
-### Iteration 20: Distribution artifacts
+### Iteration 21: Distribution artifacts
 
 `cargo install` remains the baseline installation path, but users should not need a Rust toolchain when verified binaries can be provided safely.
 
@@ -325,7 +348,7 @@ Completion criteria:
 - Archive contents, names, checksums, and provenance are deterministic and documented.
 - Unsupported targets and unsigned-binary warnings are explicit.
 
-### Iteration 21: Documentation and governance
+### Iteration 22: Documentation and governance
 
 An external user must be able to install, configure, operate, diagnose, and report problems without internal project knowledge.
 
@@ -349,13 +372,17 @@ Completion criteria:
 - Installation and troubleshooting instructions have been followed successfully from a clean environment.
 - No documentation presents an unpublished package as currently available.
 
-### Iteration 22: Private release rehearsal
+### Iteration 23: Private release rehearsal
 
 The complete release path must be exercised in the private repository without producing the first public release.
 
 Work:
 
 - Select one clean commit as the release candidate.
+- Review the structure of `src/app.rs` and `src/ui.rs` before freezing the candidate, dividing them at natural responsibility boundaries when their size or cohesion impedes review.
+- Keep that modularization behavior-preserving: separate input editing, type selection, preview and scrolling, footers, staged changes, layouts, overlays, and viewports without adding unnecessary abstractions or weakening `ui.sections` navigation.
+- Move or reorganize the affected tests with their modules, then run `make check` and repeat the default, hidden-section, footer, preview, staged-change, and compact-terminal smoke tests.
+- Review the complete candidate diff for dead code, duplication, accidental artifacts, and regressions; resolve every finding before the candidate is frozen.
 - Run the complete unprivileged quality and package validation jobs.
 - Produce every final artifact without creating a public tag, GitHub Release, or crates.io version.
 - Install and smoke-test the candidate on every supported platform.
@@ -369,9 +396,10 @@ Completion criteria:
 - The rehearsal uses the same build and validation definitions as the real release.
 - All automatic and manual evidence is attached to or linked from the release-candidate record.
 - No critical or high-risk release issue remains open.
+- The structural review records whether `src/app.rs` and `src/ui.rs` required division, and any resulting modules have clear, documented responsibilities without reducing coverage or changing behavior.
 - The candidate can be published without changing source, dependencies, or workflow definitions.
 
-### Iteration 23: Public launch and first release
+### Iteration 24: Public launch and first release
 
 This is the final pre-release iteration. Repository visibility changes only after the private rehearsal succeeds.
 
@@ -398,9 +426,9 @@ Completion criteria:
 
 ## Release gate for 0.1.0
 
-Iteration 23 cannot start until all of the following are true:
+Iteration 24 cannot start until all of the following are true:
 
-- Iterations 10 through 22 are complete.
+- Iterations 10 through 23 are complete.
 - `make check` passes from the clean candidate checkout.
 - Security, license, workflow, package, and artifact checks pass.
 - Linux, macOS, and Windows release candidates pass their defined automated and manual tests.
@@ -415,7 +443,7 @@ Iteration 23 cannot start until all of the following are true:
 
 The following work improves integration and efficiency but is not required for a safe and complete first release. Its order should be reconsidered using real user feedback.
 
-### Iteration 24: Working-tree context and optional index preparation
+### Iteration 25: Working-tree context and optional index preparation
 
 The default workflow remains committing from the prepared Git index. This iteration may expose broader working-tree context, but it must not make a file-level toggle imply an unsafe or ambiguous Git operation.
 
@@ -423,7 +451,7 @@ Work:
 
 - Record an ADR that defines whether optional index preparation remains within the product boundary and how it coexists with the staged-only composer.
 - Keep `staged` as the default view, showing exactly the content eligible for the commit.
-- Add an optional global UI preference for the initial changes view: `staged`, `all`, or `hidden`. The preference must not change which files are committed implicitly.
+- Add an optional global UI preference for the initial changes view: `staged` or `all`. Hiding staged context remains exclusively `ui.sections.staged_changes = false` and must not change which files are committed implicitly.
 - In the `all` view, present separate staged, unstaged, untracked, and partially staged sections with unambiguous labels.
 - Keep inclusion checkboxes exclusive to the staged commit snapshot. Use explicit actions such as `Stage file` for changes outside the index.
 - Decide whether full-file staging is supported at all. If it is, warn before staging a partially staged file and never silently add its unstaged content to the reviewed commit snapshot.
