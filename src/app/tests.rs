@@ -14,9 +14,12 @@ fn tab_cycles_through_all_focus_targets() {
         Focus::Scope,
         Focus::Breaking,
         Focus::Message,
+        Focus::Body,
+        Focus::Footers,
         Focus::Issue,
         Focus::Sign,
         Focus::StagedChanges,
+        Focus::Preview,
         Focus::Submit,
         Focus::CommitType,
     ];
@@ -32,9 +35,12 @@ fn back_tab_cycles_in_reverse() {
     let mut app = App::new(false);
     let expected = [
         Focus::Submit,
+        Focus::Preview,
         Focus::StagedChanges,
         Focus::Sign,
         Focus::Issue,
+        Focus::Footers,
+        Focus::Body,
         Focus::Message,
         Focus::Breaking,
         Focus::Scope,
@@ -71,8 +77,12 @@ fn staged_changes_select_files_and_leave_the_list_at_its_boundaries() {
     assert_eq!(app.focus, Focus::StagedChanges);
     assert_eq!(app.staged_selected, 1);
     app.handle(AppEvent::Down);
+    assert_eq!(app.focus, Focus::Preview);
+    app.handle(AppEvent::Tab);
     assert_eq!(app.focus, Focus::Submit);
-    app.handle(AppEvent::Up);
+    app.handle(AppEvent::BackTab);
+    assert_eq!(app.focus, Focus::Preview);
+    app.handle(AppEvent::BackTab);
     assert_eq!(app.focus, Focus::StagedChanges);
     app.handle(AppEvent::Edit(Edit::Home));
     assert_eq!(app.staged_selected, 0);
@@ -315,6 +325,29 @@ fn input_rejects_control_characters_without_changing_the_field() {
         app.validation_message(),
         Some("Paste contains unsupported control characters or is too large")
     );
+
+    focus(&mut app, Focus::Footers);
+    app.handle(AppEvent::Edit(Edit::Insert('a')));
+    app.handle(AppEvent::Enter);
+    {
+        let Mode::FooterEditor(editor) = &mut app.mode else {
+            panic!("footer editor should open");
+        };
+        editor.focus = FooterEditorFocus::Value;
+        editor.value = Input::new("a".repeat(MAX_FOOTER_VALUE_LENGTH - 1));
+    }
+    app.handle(AppEvent::Paste("bc".to_owned()));
+    let Mode::FooterEditor(editor) = &app.mode else {
+        panic!("footer editor should remain open");
+    };
+    assert_eq!(
+        editor.value.to_string().chars().count(),
+        MAX_FOOTER_VALUE_LENGTH - 1
+    );
+    assert_eq!(
+        app.validation_message(),
+        Some("Paste exceeds the field limit")
+    );
 }
 
 #[test]
@@ -487,4 +520,181 @@ fn preview_omits_an_invalid_issue_until_submission() {
     app.form.issue = Input::new("not-a-number".to_owned());
 
     assert_eq!(app.preview(), "feat: add endpoint");
+}
+
+#[test]
+fn preview_can_expand_scroll_and_restore_the_form() {
+    let mut app = App::new(false);
+    app.set_preview_scroll_limits(3, Some(8));
+    app.form.message = Input::new("add endpoint".to_owned());
+    app.form.body = Input::new("one\ntwo\nthree".to_owned());
+    focus(&mut app, Focus::Preview);
+
+    app.handle(AppEvent::Enter);
+    assert!(matches!(app.mode, Mode::PreviewExpanded));
+    app.handle(AppEvent::Down);
+    assert_eq!(app.preview_scroll, 1);
+    app.handle(AppEvent::Edit(Edit::End));
+    assert_eq!(app.preview_scroll, 8);
+    app.handle(AppEvent::Edit(Edit::Home));
+    assert_eq!(app.preview_scroll, 0);
+    app.handle(AppEvent::Help);
+    app.handle(AppEvent::Escape);
+    assert!(matches!(app.mode, Mode::PreviewExpanded));
+    app.handle(AppEvent::Escape);
+    assert!(matches!(app.mode, Mode::Form));
+    assert_eq!(app.focus, Focus::Preview);
+}
+
+#[test]
+fn preview_scrolls_before_arrow_keys_leave_its_boundaries() {
+    let mut app = App::new(false);
+    app.set_preview_scroll_limits(2, None);
+    focus(&mut app, Focus::Preview);
+
+    app.handle(AppEvent::Down);
+    assert_eq!(app.focus, Focus::Preview);
+    assert_eq!(app.preview_scroll, 1);
+    app.handle(AppEvent::Down);
+    assert_eq!(app.preview_scroll, 2);
+    app.handle(AppEvent::Down);
+    assert_eq!(app.focus, Focus::Submit);
+
+    app.handle(AppEvent::Up);
+    assert_eq!(app.focus, Focus::Preview);
+    app.handle(AppEvent::Up);
+    assert_eq!(app.preview_scroll, 1);
+    app.handle(AppEvent::Up);
+    assert_eq!(app.preview_scroll, 0);
+    app.handle(AppEvent::Up);
+    assert_eq!(app.focus, Focus::StagedChanges);
+}
+
+#[test]
+fn preview_scroll_resets_when_the_draft_changes() {
+    let mut app = App::new(false);
+    app.preview_scroll = 8;
+    focus(&mut app, Focus::Message);
+
+    app.handle(AppEvent::Edit(Edit::Insert('a')));
+
+    assert_eq!(app.preview_scroll, 0);
+}
+
+#[test]
+fn body_and_footer_editor_build_the_canonical_preview() {
+    let mut app = App::new(false);
+    app.form.message = Input::new("add endpoint".to_owned());
+    focus(&mut app, Focus::Body);
+    app.handle(AppEvent::Paste(
+        "Explain the endpoint\n\nWith examples".to_owned(),
+    ));
+    focus(&mut app, Focus::Footers);
+    app.handle(AppEvent::Edit(Edit::Insert('a')));
+    app.handle(AppEvent::Edit(Edit::Insert('c')));
+    app.handle(AppEvent::Enter);
+    let Mode::FooterEditor(editor) = &mut app.mode else {
+        panic!("footer editor should open");
+    };
+    editor.token = Input::new("Closes".to_owned());
+    editor.value = Input::new("#42".to_owned());
+    app.handle(AppEvent::Submit);
+    assert_eq!(
+        app.preview(),
+        "feat: add endpoint\n\nExplain the endpoint\n\nWith examples\n\nCloses: #42"
+    );
+}
+
+#[test]
+fn footer_editor_can_add_breaking_delete_and_reorder() {
+    let mut app = App::new(false);
+    focus(&mut app, Focus::Footers);
+    app.handle(AppEvent::Space);
+    let Mode::FooterEditor(editor) = &mut app.mode else {
+        panic!("footer editor should open");
+    };
+    editor.value = Input::new("API changed".to_owned());
+    app.handle(AppEvent::Submit);
+    app.handle(AppEvent::Edit(Edit::Insert('a')));
+    app.handle(AppEvent::Edit(Edit::Insert('r')));
+    app.handle(AppEvent::Enter);
+    let Mode::FooterEditor(editor) = &mut app.mode else {
+        panic!("footer editor should open after choosing a name");
+    };
+    editor.value = Input::new("#9".to_owned());
+    app.handle(AppEvent::Submit);
+    app.handle(AppEvent::MoveFooter(-1));
+    assert_eq!(app.form.footers[0].token, "Refs");
+    app.handle(AppEvent::Edit(Edit::Delete));
+    assert_eq!(app.form.footers.len(), 1);
+
+    app.handle(AppEvent::Enter);
+    let Mode::FooterEditor(editor) = &mut app.mode else {
+        panic!("selected footer should open for editing");
+    };
+    editor.value = Input::new("Updated API change".to_owned());
+    app.handle(AppEvent::Submit);
+    assert_eq!(app.form.footers[0].value, "Updated API change");
+}
+
+#[test]
+fn footer_name_picker_supports_standard_custom_and_cancelled_additions() {
+    let mut app = App::new(false);
+    focus(&mut app, Focus::Footers);
+    app.handle(AppEvent::Edit(Edit::Insert('a')));
+    assert!(matches!(app.mode, Mode::FooterNamePicker(_)));
+    app.handle(AppEvent::Edit(Edit::Insert('x')));
+    app.handle(AppEvent::Enter);
+    let Mode::FooterEditor(editor) = &app.mode else {
+        panic!("custom footer editor should open");
+    };
+    assert_eq!(editor.token.to_string(), "x");
+    assert_eq!(editor.focus, FooterEditorFocus::Value);
+    app.handle(AppEvent::Escape);
+    assert!(matches!(app.mode, Mode::Form));
+    assert!(app.form.footers.is_empty());
+
+    app.handle(AppEvent::Edit(Edit::Insert('a')));
+    app.handle(AppEvent::Down);
+    app.handle(AppEvent::Enter);
+    let Mode::FooterEditor(editor) = &app.mode else {
+        panic!("standard footer editor should open");
+    };
+    assert_eq!(editor.token.to_string(), "Closes");
+}
+
+#[test]
+fn footer_editor_focus_wraps_in_both_directions() {
+    let mut app = App::new(false);
+    focus(&mut app, Focus::Footers);
+    app.handle(AppEvent::Edit(Edit::Insert('a')));
+    app.handle(AppEvent::Enter);
+    app.handle(AppEvent::BackTab);
+    app.handle(AppEvent::BackTab);
+    let Mode::FooterEditor(editor) = &app.mode else {
+        panic!("footer editor should remain open");
+    };
+    assert_eq!(editor.focus, FooterEditorFocus::Save);
+}
+
+#[test]
+fn footer_navigation_leaves_at_boundaries_and_can_remove_every_footer() {
+    let mut app = App::new(false);
+    app.form.footers = vec![
+        Footer::new("Refs".to_owned(), "#1".to_owned()),
+        Footer::new("Closes".to_owned(), "#2".to_owned()),
+    ];
+    focus(&mut app, Focus::Footers);
+
+    app.handle(AppEvent::Down);
+    assert_eq!(app.footer_selected, 1);
+    app.handle(AppEvent::Down);
+    assert_eq!(app.focus, Focus::Issue);
+    app.handle(AppEvent::Up);
+    assert_eq!(app.focus, Focus::Footers);
+    app.handle(AppEvent::Edit(Edit::Delete));
+    app.handle(AppEvent::Edit(Edit::Delete));
+    assert!(app.form.footers.is_empty());
+    app.handle(AppEvent::Down);
+    assert_eq!(app.focus, Focus::Issue);
 }

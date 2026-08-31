@@ -148,6 +148,7 @@ dependencies = [
  "tempfile",
  "toml",
  "tui-input",
+ "unicode-width",
 ]
 
 [[package]]
