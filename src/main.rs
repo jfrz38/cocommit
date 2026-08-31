@@ -36,7 +36,7 @@ fn run() -> Result<()> {
     let staged_changes = git::preflight(&working_directory)?;
     let work_tree_root = git::work_tree_root(&working_directory)?;
     let config = config::load(&work_tree_root)?;
-    let mut app = app::App::new(config.ui.sign);
+    let mut app = app::App::new(config.ui.sign).with_message_policy(&config.message);
     app.set_staged_changes(staged_changes);
     match terminal::run(&mut app)? {
         terminal::TerminalResult::Cancelled => {}
