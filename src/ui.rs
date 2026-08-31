@@ -104,7 +104,7 @@ fn render_expanded(frame: &mut Frame, app: &App, area: Rect) {
     render_toggle_row(
         frame,
         rows[5],
-        "Sign (-S)",
+        "Sign commit",
         app.sign,
         app.focus == Focus::Sign,
     );
@@ -234,7 +234,12 @@ fn render_compact_row(frame: &mut Frame, area: Rect, app: &App, index: usize) ->
             None,
             app.focus == Focus::Issue,
         ),
-        5 => ("Sign (-S)", None, Some(app.sign), app.focus == Focus::Sign),
+        5 => (
+            "Sign commit",
+            None,
+            Some(app.sign),
+            app.focus == Focus::Sign,
+        ),
         6 => ("Staged", None, None, app.focus == Focus::StagedChanges),
         7 => ("", None, None, app.focus == Focus::Submit),
         _ => return None,

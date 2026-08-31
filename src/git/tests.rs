@@ -6,15 +6,15 @@ use super::{
 };
 
 #[test]
-fn builds_unsigned_commit_arguments() {
+fn disables_signing_when_not_requested() {
     assert_eq!(
         commit_arguments("feat: add Git commands", false),
-        ["commit", "-m", "feat: add Git commands"]
+        ["commit", "--no-gpg-sign", "-m", "feat: add Git commands"]
     );
 }
 
 #[test]
-fn adds_signing_flag_only_when_requested() {
+fn enables_signing_when_requested() {
     let arguments = commit_arguments("fix: handle error", true);
 
     assert_eq!(arguments, ["commit", "-S", "-m", "fix: handle error"]);
@@ -60,8 +60,8 @@ fn keeps_message_with_spaces_and_quotes_as_one_argument() {
     let message = "fix: preserve \"quoted text\"";
     let arguments = commit_arguments(message, false);
 
-    assert_eq!(arguments.len(), 3);
-    assert_eq!(arguments[2], message);
+    assert_eq!(arguments.len(), 4);
+    assert_eq!(arguments[3], message);
 }
 
 #[test]

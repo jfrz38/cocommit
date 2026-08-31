@@ -21,6 +21,10 @@ Tests concentrate on stable behavior with high regression risk: message construc
 - Invalid type delimiters and whitespace.
 - Newline rejection in type, scope, and message.
 - Issue parsing, non-numeric input, and `u64` overflow.
+- Header-only, body-only, footer-only, and combined complete messages.
+- Exact blank-line separation, body paragraphs, footer ordering, and multiline footer values.
+- `BREAKING CHANGE` and `BREAKING-CHANGE` normalization, coexistence with `!`, and duplicate breaking-footer rejection.
+- Repeatable trailers such as `Co-authored-by`, invalid footer tokens, empty footer values, and blank footer-value lines.
 
 The expected rendered string must be asserted exactly.
 
@@ -41,9 +45,10 @@ Separate TOML parsing from filesystem access. Test:
 
 Keep command construction observable without running a commit. Test:
 
-- `-S` appears only for explicit signing.
-- A disabled signing choice does not add `--no-gpg-sign`.
+- An enabled signing choice adds `-S`.
+- A disabled signing choice adds `--no-gpg-sign`, including when `commit.gpgSign` is enabled.
 - A message with spaces and quotes is passed as one argument.
+- A complete message with Unicode and line breaks is passed unchanged as one argument.
 - Preflight exit code `0` means no staged changes.
 - Preflight exit code `1` means staged changes exist.
 - Other statuses are errors.
@@ -85,7 +90,7 @@ An integration test uses `tempfile` and the real Git CLI:
 4. Create a file and stage it.
 5. Invoke the production commit-command path without signing.
 6. Run `git log -1 --format=%s`.
-7. Assert the subject equals the expected Conventional Commit message.
+7. Assert `git log --format=%B` equals the expected complete Conventional Commit message, including its body and footers.
 
 No signing or hook behavior is tested automatically because those depend on host configuration. The product design intentionally delegates those workflows to Git.
 

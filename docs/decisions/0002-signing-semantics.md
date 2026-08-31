@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted.
+Superseded by [ADR 0010](0010-explicit-signing-toggle.md).
 
 ## Context
 
@@ -10,10 +10,8 @@ A boolean UI cannot represent force signing, use Git defaults, and force no sign
 
 ## Decision
 
-The `Sign (-S)` toggle adds `-S` only when enabled. When disabled, cocommit omits both `-S` and `--no-gpg-sign`.
+This decision was superseded before the first public release.
 
 ## Consequences
 
-- Disabled does not promise an unsigned commit.
-- Existing Git signing configuration remains effective.
-- A future three-state setting can add force-unsigned behavior only when justified.
+- See ADR 0010 for the current explicit signed-or-unsigned behavior.

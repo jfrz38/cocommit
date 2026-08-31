@@ -1,4 +1,4 @@
-use super::{CommitDraft, DraftField, ValidationError, ValidationErrorKind};
+use super::{CommitDraft, DraftField, Footer, ValidationError, ValidationErrorKind};
 
 fn draft(
     commit_type: &str,
@@ -13,7 +13,13 @@ fn draft(
         breaking,
         message.to_owned(),
         issue,
+        None,
+        Vec::new(),
     )
+}
+
+fn footer(token: &str, value: &str) -> Footer {
+    Footer::new(token.to_owned(), value.to_owned())
 }
 
 fn error(field: DraftField, kind: ValidationErrorKind) -> ValidationError {
@@ -160,6 +166,8 @@ fn from_raw_aggregates_errors_in_field_order() {
             false,
             "\n".to_owned(),
             Some("too-big".to_owned()),
+            None,
+            Vec::new(),
         ),
         Err(vec![
             error(
@@ -172,6 +180,152 @@ fn from_raw_aggregates_errors_in_field_order() {
             ),
             error(DraftField::Message, ValidationErrorKind::Required),
             error(DraftField::Issue, ValidationErrorKind::InvalidDecimal),
+        ])
+    );
+}
+
+#[test]
+fn renders_body_and_ordered_footers_with_exact_separation() {
+    let draft = CommitDraft::new(
+        "feat".to_owned(),
+        Some("api".to_owned()),
+        false,
+        "add bulk import".to_owned(),
+        None,
+        Some("Import existing records.\n\nThe operation is transactional.".to_owned()),
+        vec![
+            footer("Closes", "#42"),
+            footer("Co-authored-by", "Marta Garcia <marta@example.test>"),
+        ],
+    );
+
+    assert_eq!(
+        draft.validated_message(),
+        Ok(
+            "feat(api): add bulk import\n\nImport existing records.\n\nThe operation is transactional.\n\nCloses: #42\nCo-authored-by: Marta Garcia <marta@example.test>".to_owned()
+        )
+    );
+}
+
+#[test]
+fn normalizes_multiline_sections_without_losing_internal_structure() {
+    let draft = CommitDraft::new(
+        "feat".to_owned(),
+        None,
+        false,
+        "add import".to_owned(),
+        None,
+        Some("\n  Explain the behavior.\n\n  Keep this paragraph.\n".to_owned()),
+        vec![footer("Refs", "\n#42\ncontinuation\n")],
+    );
+
+    assert_eq!(
+        draft.render_message(),
+        "feat: add import\n\nExplain the behavior.\n\n  Keep this paragraph.\n\nRefs: #42\ncontinuation"
+    );
+
+    let empty_body = CommitDraft::new(
+        "feat".to_owned(),
+        None,
+        false,
+        "add import".to_owned(),
+        None,
+        Some(" \n ".to_owned()),
+        Vec::new(),
+    );
+    assert_eq!(empty_body.body, None);
+}
+
+#[test]
+fn canonicalizes_both_breaking_footer_tokens_and_allows_header_marker() {
+    let draft = CommitDraft::new(
+        "feat".to_owned(),
+        None,
+        true,
+        "replace configuration".to_owned(),
+        None,
+        None,
+        vec![footer(
+            "BREAKING-CHANGE",
+            "old configuration is unsupported",
+        )],
+    );
+
+    assert_eq!(draft.footers[0].token, "BREAKING CHANGE");
+    assert_eq!(
+        draft.validated_message(),
+        Ok(
+            "feat!: replace configuration\n\nBREAKING CHANGE: old configuration is unsupported"
+                .to_owned()
+        )
+    );
+}
+
+#[test]
+fn allows_repeatable_trailers_but_rejects_invalid_or_duplicate_breaking_footers() {
+    let repeated = CommitDraft::new(
+        "docs".to_owned(),
+        None,
+        false,
+        "credit contributors".to_owned(),
+        None,
+        None,
+        vec![
+            footer("Co-authored-by", "A <a@example.test>"),
+            footer("Co-authored-by", "B <b@example.test>"),
+        ],
+    );
+    assert!(repeated.validate().is_ok());
+
+    let invalid = CommitDraft::new(
+        "feat".to_owned(),
+        None,
+        false,
+        "change API".to_owned(),
+        None,
+        None,
+        vec![
+            Footer {
+                token: "Bad Token".to_owned(),
+                value: "value".to_owned(),
+            },
+            Footer {
+                token: "Refs--more".to_owned(),
+                value: "value".to_owned(),
+            },
+            Footer {
+                token: "Refs".to_owned(),
+                value: "first line\n\nsecond line".to_owned(),
+            },
+            Footer {
+                token: "Closes".to_owned(),
+                value: "   ".to_owned(),
+            },
+            footer("BREAKING CHANGE", "first"),
+            footer("BREAKING-CHANGE", "second"),
+        ],
+    );
+
+    assert_eq!(
+        invalid.validate(),
+        Err(vec![
+            error(
+                DraftField::Footer(0),
+                ValidationErrorKind::ContainsForbiddenCharacter,
+            ),
+            error(
+                DraftField::Footer(1),
+                ValidationErrorKind::ContainsForbiddenCharacter,
+            ),
+            error(
+                DraftField::Footer(2),
+                ValidationErrorKind::ContainsBlankLine
+            ),
+            error(DraftField::Footer(3), ValidationErrorKind::Required),
+            error(
+                DraftField::Footer(5),
+                ValidationErrorKind::DuplicateSemanticField,
+            ),
         ])
     );
 }

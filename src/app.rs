@@ -77,6 +77,8 @@ impl FormState {
             self.breaking,
             self.message.to_string(),
             Some(self.issue.to_string()),
+            None,
+            Vec::new(),
         )
     }
 }
@@ -207,6 +209,8 @@ impl App {
             self.form.breaking,
             self.form.message.to_string(),
             issue,
+            None,
+            Vec::new(),
         )
         .render_message()
     }
@@ -240,7 +244,19 @@ impl App {
                     "Issue must be a decimal number"
                 }
                 (DraftField::Issue, ValidationErrorKind::IntegerOutOfRange) => "Issue is too large",
-                _ => "Invalid value",
+                (DraftField::Footer(_), ValidationErrorKind::Required) => {
+                    "Footer value is required"
+                }
+                (DraftField::Footer(_), ValidationErrorKind::ContainsBlankLine) => {
+                    "Footer values cannot contain blank lines"
+                }
+                (DraftField::Footer(_), ValidationErrorKind::ContainsForbiddenCharacter) => {
+                    "Footer token is invalid"
+                }
+                (DraftField::Footer(_), ValidationErrorKind::DuplicateSemanticField) => {
+                    "Breaking change footer is duplicated"
+                }
+                _ => "Commit message is invalid",
             }))
     }
 
@@ -577,6 +593,7 @@ fn focus_for(field: DraftField) -> Focus {
         DraftField::Scope => Focus::Scope,
         DraftField::Message => Focus::Message,
         DraftField::Issue => Focus::Issue,
+        DraftField::Footer(_) => Focus::Message,
     }
 }
 

@@ -45,7 +45,7 @@ tests/
 |---|---|
 | `main.rs` | Orchestrates preflight, config loading, terminal lifecycle, TUI results, index operations, and final Git execution. |
 | `cli.rs` | Parses the small command-line contract and provides usage text without terminal or Git dependencies. |
-| `commit.rs` | Defines the commit draft, canonical rendering, and validation. Has no terminal or Git dependency. |
+| `commit.rs` | Defines the complete commit draft, canonical rendering, and validation. Has no terminal or Git dependency. |
 | `config.rs` | Defines layered UI preferences and message policy, resolves global and repository paths, parses versioned TOML, and merges configuration. |
 | `git.rs` | Runs explicit Git commands, interprets exit statuses, constructs `git commit` and literal unstage arguments, and reads the staged index. |
 | `app.rs` | Holds editable form state, staged-file inclusion choices, focus, popup state, feedback, and pure state transitions. |
@@ -72,10 +72,12 @@ pub struct CommitDraft {
     pub breaking: bool,
     pub message: String,
     pub issue: Option<u64>,
+    pub body: Option<String>,
+    pub footers: Vec<Footer>,
 }
 ```
 
-Signing is deliberately not part of `CommitDraft`: it changes the Git command, not the Conventional Commit message.
+Signing is deliberately not part of `CommitDraft`: it changes the Git command, not the Conventional Commit message. The binary UI choice always maps to either `-S` or `--no-gpg-sign`.
 
 ```rust
 impl CommitDraft {
@@ -85,7 +87,7 @@ impl CommitDraft {
 }
 ```
 
-`render_message` is the sole message formatter. `validated_message` validates first and then delegates to it, preventing duplicate formatting logic.
+`Footer` holds an ordered trailer token and value. `render_message` is the sole formatter for header, optional body, and ordered footers; `validated_message` validates first and then delegates to it, preventing duplicate formatting logic. Iteration 15 establishes this model while Iteration 16 adds its editors to the TUI.
 
 `ValidationError` should identify its relevant form field so the UI can focus it after a failed submission.
 

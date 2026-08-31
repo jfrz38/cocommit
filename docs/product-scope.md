@@ -15,7 +15,7 @@ The sole v1 workflow is:
 
 The supported non-interactive commands are `cocommit --help` and `cocommit --version`. All other arguments are rejected; field prefills and automation remain out of scope.
 
-## Commit header
+## Commit message domain
 
 The canonical rendered format is:
 
@@ -31,6 +31,8 @@ feat(api): add authentication
 feat(api)!: change authentication API
 feat(api): add authentication (#123)
 ```
+
+The domain also supports an optional multiline body and ordered footers, separated from the header and each other by one blank line. The current interface remains header-only until the multiline and footer controls in Iteration 16.
 
 ## Required behavior
 
@@ -52,7 +54,7 @@ feat(api): add authentication (#123)
 
 - Staging files.
 - Full diff viewing, history, branches, pushing, or pull requests.
-- Commit body, footers, amend mode, empty commits, or changelog generation.
+- Multiline and footer editing in the TUI, amend mode, empty commits, or changelog generation.
 - AI-generated messages.
 - Replacing Git hooks, credentials, signing, or editor workflows.
 - Applying repository message policy to type selection, validation, or rendering. The policy schema and precedence are available, but enforcement is deferred to Iteration 17.
