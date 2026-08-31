@@ -114,13 +114,19 @@ Rules:
 - Do not create config files or directories automatically.
 - Git identity, keys, hooks, and signing infrastructure remain Git's responsibility.
 
-New configuration files use versioned TOML. The global file may contain UI and message defaults:
+New configuration files use versioned TOML. The following is the Iteration 17 target for global UI and message defaults; `ui.sections` is not accepted until that iteration is implemented:
 
 ```toml
 schema_version = 1
 
 [ui]
 sign = true
+
+[ui.sections]
+staged_changes = true
+body = true
+footers = true
+issue = true
 
 [message]
 types = ["feat", "fix", "docs", "chore"]
@@ -136,7 +142,9 @@ prefix = "PROJ-"
 style = "plain" # parenthesized | plain
 ```
 
-The repository policy is always `<work-tree-root>/.cocommit.toml`, where Git resolves the root for subdirectories and linked worktrees. It accepts only `[message]`, never `[ui]` or legacy `sign`:
+In the Iteration 17 target, every `ui.sections` value defaults to `true`. These are personal global preferences: Type, Scope, Breaking, Subject, Sign commit, Preview, and Commit remain visible, while hidden optional sections consume no UI space or input path. A repository policy cannot override them.
+
+The repository policy is always `<work-tree-root>/.cocommit.toml`, where Git resolves the root for subdirectories and linked worktrees. It accepts only `[message]`, never `[ui]`, `[ui.sections]`, or legacy `sign`:
 
 ```toml
 schema_version = 1
@@ -151,7 +159,7 @@ max_length = 72
 
 `types` is the future allowed-type list and cannot be empty. Scope suggestions are never a restriction. Issue identifiers will remain decimal numbers; `prefix` and `style` support common renderings without templates or regular expressions. The only supported scope syntax is `type(scope): subject`; `[]` and `<>` are deliberately not configurable.
 
-Iteration 14 loads and validates these policies but does not apply them to the current picker, validation, preview, or rendered Git message. That enforcement is deferred to Iteration 17, preserving the current formatter as the only active path. The legacy global file must be migrated manually from `sign = false` to `[ui]\nsign = false` before adding schema-versioned fields. No file is rewritten automatically.
+Iteration 14 loads and validates these policies but does not apply them to the current picker, validation, preview, or rendered Git message. That enforcement is deferred to Iteration 18, preserving the current formatter as the only active path. The legacy global file must be migrated manually from `sign = false` to `[ui]\nsign = false` before adding schema-versioned fields. No file is rewritten automatically.
 
 ## Validation contract
 
@@ -164,3 +172,5 @@ Validation occurs before the terminal closes for a commit attempt:
 - No arbitrary subject-length, capitalization, punctuation, or tense policy is imposed.
 
 All text fields are normalized by trimming their outer whitespace when creating `CommitDraft` for rendering and validation.
+
+When global preferences hide Body, Footers, or Issue, the UI supplies their absent values and does not route validation feedback to an invisible editor. When Staged changes is hidden, preflight still requires a non-empty index, but the application constructs no exclusion list or unstage command; Git receives the index as it exists at submission.

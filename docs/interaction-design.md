@@ -35,17 +35,23 @@ The interface remains compact and needs no mouse support.
 
 The focused row must have a visually distinct border, label, or background. The Subject label shows the character count and any configured subject-length, capitalization, or terminal-punctuation convention as non-blocking guidance. The preview is rebuilt from the current draft after every edit. Its title shows the visible starting line and total line count; when content is outside its viewport it advertises `Enter expand`. The status block is hidden until feedback is needed, uses red for errors, and green for successful index operations.
 
-The full bordered layout is used when space allows. Smaller terminals use compact one-line rows with automatic vertical scrolling that keeps the focused field visible. For terminals too small to safely draw even the compact layout, render only a clear resize instruction. Do not construct invalid Ratatui layout areas.
+The full bordered layout is used when space allows. Smaller terminals use compact one-line rows with automatic vertical scrolling that keeps the focused field visible. Configured hidden optional sections consume no row, border, summary, or placeholder in either layout. For terminals too small to safely draw even the compact layout, render only a clear resize instruction. Do not construct invalid Ratatui layout areas.
+
+## Configurable sections
+
+Iteration 17 will add global `ui.sections` preferences that independently control Body, Footers, Issue, and Staged changes. All will be visible by default. Type, Scope, Breaking, Subject, Sign commit, Preview, and Commit will always be visible. Repository configuration cannot change this preference.
+
+In that iteration, a hidden optional section will have no focus target, help entry, key hint, action, picker, or modal. Hidden Body, Footers, and Issue will be empty and cannot receive validation focus. Hiding Staged changes will retain preflight but remove the staged summary, selection, inclusion checkboxes, and unstage behavior; the resulting commit will use all files in the Git index at submission.
 
 ## Focus model
 
-Focus advances in this order:
+Iteration 17 focus candidates will be ordered as follows and filtered to the visible sections:
 
 ```text
 Type -> Scope -> Breaking -> Message -> Body -> Footers -> Issue -> Sign -> Staged changes -> Preview -> Submit
 ```
 
-`Up` and `Down` move backward and forward through fields, respectively, and wrap. When Footers or Staged changes is focused, they select a visibly highlighted item and leave the section at its boundaries. Preview scrolls with these keys while content remains above or below it; `Up` on its first line moves to Staged changes and `Down` at its end moves to Commit. `Home`/`End` jump within its real scroll bounds. `Enter` opens an expanded preview from Preview. `Tab` and `Shift+Tab` always move focus. Typing or pasting while Type is focused opens its popup search. Text input is otherwise active for Scope, Message, Body, and Issue.
+In that iteration, `Up` and `Down` will move backward and forward through visible fields, respectively, and wrap. When Footers or Staged changes is visible and focused, they will select a visibly highlighted item and leave the section at its boundaries. Preview will scroll with these keys while content remains above or below it; at a boundary it will move to the preceding or following visible field. `Home`/`End` will jump within its real scroll bounds. `Enter` will open an expanded preview from Preview. `Tab` and `Shift+Tab` will always move focus. Typing or pasting while Type is focused will open its popup search. Text input will otherwise be active for visible Scope, Message, Body, and Issue.
 
 ## Expanded preview
 
@@ -53,7 +59,7 @@ The expanded preview is a read-only overlay over the current form. It displays t
 
 ## Body and footers
 
-Body accepts multiline text and preserves paragraph breaks. Its cursor and viewport follow the active line. Footers are shown in order and keep the selected entry visible. `A` opens a footer-name picker containing `BREAKING CHANGE`, `Closes`, `Fixes`, `Refs`, `Co-authored-by`, and a custom-name choice for any other trailer. `Enter` edits the selected footer, with Footer name, multiline Value, and Save footer controls; `Space` creates or edits the one `BREAKING CHANGE` footer; `Delete` removes the selected footer; `Ctrl+Up` and `Ctrl+Down` reorder it. The modal keeps edits isolated until Save, and help preserves its state.
+When Body is visible, it accepts multiline text and preserves paragraph breaks. Its cursor and viewport follow the active line. When Footers is visible, footers are shown in order and keep the selected entry visible. `A` opens a footer-name picker containing `BREAKING CHANGE`, `Closes`, `Fixes`, `Refs`, `Co-authored-by`, and a custom-name choice for any other trailer. `Enter` edits the selected footer, with Footer name, multiline Value, and Save footer controls; `Space` creates or edits the one `BREAKING CHANGE` footer; `Delete` removes the selected footer; `Ctrl+Up` and `Ctrl+Down` reorder it. The modal keeps edits isolated until Save, and help preserves its state. In Iteration 17, those editors and shortcuts will not exist when their section is hidden.
 
 ## Keyboard behavior
 
@@ -101,7 +107,7 @@ On validation failure:
 
 1. Keep the UI open.
 2. Display a concise field-specific error in Error.
-3. Move focus to the first invalid field.
+3. In Iteration 17, move focus to the first invalid visible field.
 
 On cancel, restore the terminal and return success without invoking Git. On valid submission, the UI returns the draft and signing choice to `main`; Git runs only after the terminal is restored.
 
@@ -116,4 +122,4 @@ On cancel, restore the terminal and return success without invoking Git. On vali
 
 ## Staged-change context
 
-Before the form opens, cocommit captures the Git index. The expanded layout shows the staged-file total, `A/M/D/R` counts, insertion/deletion totals, binary-file count when applicable, and a bounded scrollable list with a visible selected file and inclusion checkbox. File names are rendered safely even when they contain unusual characters. `Space` changes that checkbox without invoking Git. On submission, cocommit removes every excluded file from the index without changing its working-tree content, then commits the remaining files. A rename passes both paths. If it is the final included file, the operation is blocked with `Cannot unstage the last staged file`. The compact layout shows the aggregate summary with the selected-file position and places Preview directly below the form rows it renders.
+Before the form opens, cocommit captures the Git index. The expanded layout shows the staged-file total, `A/M/D/R` counts, insertion/deletion totals, binary-file count when applicable, and a bounded scrollable list with a visible selected file and inclusion checkbox. File names are rendered safely even when they contain unusual characters. `Space` changes that checkbox without invoking Git. On submission, cocommit removes every excluded file from the index without changing its working-tree content, then commits the remaining files. A rename passes both paths. If it is the final included file, the operation is blocked with `Cannot unstage the last staged file`. The compact layout shows the aggregate summary with the selected-file position and places Preview directly below the form rows it renders. In Iteration 17, when this section is hidden, no staged summary, selection, checkbox, or unstage action will exist; every staged file will be committed.
