@@ -34,8 +34,9 @@ fn run() -> Result<()> {
     terminal::ensure_standard_streams_are_interactive()?;
     let working_directory = env::current_dir().context("failed to determine current directory")?;
     let staged_changes = git::preflight(&working_directory)?;
-    let config = config::load()?;
-    let mut app = app::App::new(config.sign);
+    let work_tree_root = git::work_tree_root(&working_directory)?;
+    let config = config::load(&work_tree_root)?;
+    let mut app = app::App::new(config.ui.sign);
     app.set_staged_changes(staged_changes);
     match terminal::run(&mut app)? {
         terminal::TerminalResult::Cancelled => {}
