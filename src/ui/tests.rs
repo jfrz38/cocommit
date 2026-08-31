@@ -35,6 +35,14 @@ fn renders_form_at_normal_terminal_size() {
 }
 
 #[test]
+fn footer_hint_always_describes_space_as_toggle() {
+    assert_eq!(
+        footer_hint(),
+        "F1 Help  |  Up/Down Navigate  |  Space Toggle  |  Ctrl+Enter Commit  |  Esc Cancel"
+    );
+}
+
+#[test]
 fn hidden_sections_consume_no_space_or_expose_actions() {
     let mut app = App::new(false).with_sections(UiSections {
         staged_changes: false,

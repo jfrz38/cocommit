@@ -186,7 +186,7 @@ fn render_expanded(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLim
         render_status(frame, rows[row], status, app.status_is_error());
     }
     row += 1;
-    render_footer(frame, rows[row], app);
+    render_footer(frame, rows[row]);
 
     if let Mode::TypePicker(picker) = &app.mode {
         cursor = render_picker(frame, area, picker);
@@ -300,7 +300,7 @@ fn render_compact(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLimi
         );
     }
     frame.render_widget(
-        Paragraph::new(footer_hint(app))
+        Paragraph::new(footer_hint())
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true }),
         rows[3],
@@ -745,21 +745,17 @@ fn render_status(frame: &mut Frame, area: Rect, status: &str, is_error: bool) {
     );
 }
 
-fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
+fn render_footer(frame: &mut Frame, area: Rect) {
     frame.render_widget(
-        Paragraph::new(footer_hint(app))
+        Paragraph::new(footer_hint())
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true }),
         area,
     );
 }
 
-fn footer_hint(app: &App) -> &'static str {
-    if app.sections.footers {
-        "F1 Help  Up/Down Navigate  A Add footer  Ctrl+Enter Commit  Esc Cancel"
-    } else {
-        "F1 Help  Up/Down Navigate  Ctrl+Enter Commit  Esc Cancel"
-    }
+fn footer_hint() -> &'static str {
+    "F1 Help  |  Up/Down Navigate  |  Space Toggle  |  Ctrl+Enter Commit  |  Esc Cancel"
 }
 
 fn render_help(frame: &mut Frame, area: Rect, app: &App) {
