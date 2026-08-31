@@ -15,7 +15,9 @@ fn rendered(app: &App, width: u16, height: u16) -> String {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).expect("test terminal should initialize");
     terminal
-        .draw(|frame| render(frame, app))
+        .draw(|frame| {
+            let _ = render(frame, app);
+        })
         .expect("rendering should not fail");
     terminal
         .backend()
@@ -257,6 +259,7 @@ fn preview_viewport_clamps_scroll_and_counts_wide_wrapped_lines() {
     let viewport = super::preview_viewport("header\n界界界界\nfooter", Rect::new(0, 0, 4, 2), 99);
 
     assert_eq!(viewport.total_lines, 6);
+    assert_eq!(viewport.max_scroll, 4);
     assert_eq!(viewport.scroll, 4);
     assert_eq!(viewport.first_line, 5);
     assert_eq!(viewport.last_line, 6);

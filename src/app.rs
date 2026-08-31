@@ -191,6 +191,8 @@ pub struct App {
     pub staged_selected: usize,
     pub footer_selected: usize,
     pub preview_scroll: u16,
+    preview_scroll_limit: u16,
+    expanded_preview_scroll_limit: u16,
     subject_policy: SubjectPolicy,
     staged_included: Vec<bool>,
     pub validation_error: Option<ValidationError>,
@@ -222,6 +224,8 @@ impl App {
             staged_selected: 0,
             footer_selected: 0,
             preview_scroll: 0,
+            preview_scroll_limit: 0,
+            expanded_preview_scroll_limit: 0,
             subject_policy: SubjectPolicy::default(),
             staged_included: Vec::new(),
             validation_error: None,
@@ -271,6 +275,15 @@ impl App {
         self.staged_changes = staged_changes;
         self.staged_selected = 0;
         self.staged_included = vec![true; self.staged_changes.files.len()];
+    }
+
+    /// Synchronizes preview scroll limits calculated from the current terminal viewport.
+    pub fn set_preview_scroll_limits(&mut self, form_limit: u16, expanded_limit: Option<u16>) {
+        self.preview_scroll_limit = form_limit;
+        if let Some(expanded_limit) = expanded_limit {
+            self.expanded_preview_scroll_limit = expanded_limit;
+        }
+        self.preview_scroll = self.preview_scroll.min(self.active_preview_scroll_limit());
     }
 
     pub fn staged_file_is_included(&self, index: usize) -> bool {
@@ -417,11 +430,18 @@ impl App {
             AppEvent::Up if self.focus == Focus::StagedChanges => self.move_staged(-1),
             AppEvent::Down if self.focus == Focus::Footers => self.move_footer_selection(1),
             AppEvent::Up if self.focus == Focus::Footers => self.move_footer_selection(-1),
-            AppEvent::Up if self.focus == Focus::Preview => self.scroll_preview(-1),
-            AppEvent::Down if self.focus == Focus::Preview => self.scroll_preview(1),
+            AppEvent::Up if self.focus == Focus::Preview && self.preview_scroll > 0 => {
+                self.scroll_preview(-1)
+            }
+            AppEvent::Down
+                if self.focus == Focus::Preview
+                    && self.preview_scroll < self.preview_scroll_limit =>
+            {
+                self.scroll_preview(1)
+            }
             AppEvent::Edit(Edit::Home) if self.focus == Focus::Preview => self.preview_scroll = 0,
             AppEvent::Edit(Edit::End) if self.focus == Focus::Preview => {
-                self.preview_scroll = u16::MAX
+                self.preview_scroll = self.preview_scroll_limit
             }
             AppEvent::Down => self.focus = self.focus.next(),
             AppEvent::Up => self.focus = self.focus.previous(),
@@ -513,7 +533,7 @@ impl App {
             AppEvent::Up => self.scroll_preview(-1),
             AppEvent::Down => self.scroll_preview(1),
             AppEvent::Edit(Edit::Home) => self.preview_scroll = 0,
-            AppEvent::Edit(Edit::End) => self.preview_scroll = u16::MAX,
+            AppEvent::Edit(Edit::End) => self.preview_scroll = self.expanded_preview_scroll_limit,
             AppEvent::Tab
             | AppEvent::BackTab
             | AppEvent::Space
@@ -1011,11 +1031,22 @@ impl App {
     }
 
     fn scroll_preview(&mut self, direction: isize) {
+        let limit = self.active_preview_scroll_limit();
         self.preview_scroll = if direction.is_negative() {
             self.preview_scroll.saturating_sub(1)
         } else {
-            self.preview_scroll.saturating_add(1)
+            self.preview_scroll.saturating_add(1).min(limit)
         };
+    }
+
+    fn active_preview_scroll_limit(&self) -> u16 {
+        match &self.mode {
+            Mode::PreviewExpanded => self.expanded_preview_scroll_limit,
+            Mode::Help(previous) if matches!(previous.as_ref(), Mode::PreviewExpanded) => {
+                self.expanded_preview_scroll_limit
+            }
+            _ => self.preview_scroll_limit,
+        }
     }
 
     fn move_staged(&mut self, direction: isize) {
