@@ -379,6 +379,10 @@ The complete release path must be exercised in the private repository without pr
 Work:
 
 - Select one clean commit as the release candidate.
+- Review the structure of `src/app.rs` and `src/ui.rs` before freezing the candidate, dividing them at natural responsibility boundaries when their size or cohesion impedes review.
+- Keep that modularization behavior-preserving: separate input editing, type selection, preview and scrolling, footers, staged changes, layouts, overlays, and viewports without adding unnecessary abstractions or weakening `ui.sections` navigation.
+- Move or reorganize the affected tests with their modules, then run `make check` and repeat the default, hidden-section, footer, preview, staged-change, and compact-terminal smoke tests.
+- Review the complete candidate diff for dead code, duplication, accidental artifacts, and regressions; resolve every finding before the candidate is frozen.
 - Run the complete unprivileged quality and package validation jobs.
 - Produce every final artifact without creating a public tag, GitHub Release, or crates.io version.
 - Install and smoke-test the candidate on every supported platform.
@@ -392,6 +396,7 @@ Completion criteria:
 - The rehearsal uses the same build and validation definitions as the real release.
 - All automatic and manual evidence is attached to or linked from the release-candidate record.
 - No critical or high-risk release issue remains open.
+- The structural review records whether `src/app.rs` and `src/ui.rs` required division, and any resulting modules have clear, documented responsibilities without reducing coverage or changing behavior.
 - The candidate can be published without changing source, dependencies, or workflow definitions.
 
 ### Iteration 24: Public launch and first release
