@@ -9,7 +9,9 @@ The interface remains compact and needs no mouse support.
 │ Type       feat                           │
 │ Scope                                     │
 │ Breaking   [ ]                            │
-│ Message                                   │
+│ Subject 0/72; lowercase; no punctuation   │
+│ Body                                      │
+│ Footers                                   │
 │ Issue                                     │
 │ Sign commit [ ]                            │
 │                                            │
@@ -19,7 +21,11 @@ The interface remains compact and needs no mouse support.
 │ R docs/guide.md -> docs/usage.md           │
 │               [ Commit ]                   │
 ├─ Preview ─────────────────────────────────┤
-│ feat                                       │
+│ feat: add endpoint                         │
+│                                             │
+│ Details                                    │
+│                                             │
+│ Closes: #42                                │
 ├─ Error ───────────────────────────────────┤
 │ Message is required                       │
 ├───────────────────────────────────────────┤
@@ -27,7 +33,7 @@ The interface remains compact and needs no mouse support.
 └────────────────────────────────────────────┘
 ```
 
-The focused row must have a visually distinct border, label, or background. The preview is rebuilt from the current draft after every edit. The status block is hidden until feedback is needed, uses red for errors, and green for successful index operations.
+The focused row must have a visually distinct border, label, or background. The Subject label shows the character count and any configured subject-length, capitalization, or terminal-punctuation convention as non-blocking guidance. The preview is rebuilt from the current draft after every edit. Its title shows the visible starting line and total line count; when content is outside its viewport it advertises `Enter expand`. The status block is hidden until feedback is needed, uses red for errors, and green for successful index operations.
 
 The full bordered layout is used when space allows. Smaller terminals use compact one-line rows with automatic vertical scrolling that keeps the focused field visible. For terminals too small to safely draw even the compact layout, render only a clear resize instruction. Do not construct invalid Ratatui layout areas.
 
@@ -36,10 +42,18 @@ The full bordered layout is used when space allows. Smaller terminals use compac
 Focus advances in this order:
 
 ```text
-Type -> Scope -> Breaking -> Message -> Issue -> Sign -> Staged changes -> Submit
+Type -> Scope -> Breaking -> Message -> Body -> Footers -> Issue -> Sign -> Staged changes -> Preview -> Submit
 ```
 
-`Up` and `Down` move backward and forward through fields, respectively, and wrap. When Staged changes is focused, they select a visibly highlighted file and scroll its bounded list as necessary; at the first or last file, they move to Sign or Submit. `Home` and `End` move to the first and last item. `Tab` and `Shift+Tab` always move focus. Typing or pasting while Type is focused opens its popup search. Text input is otherwise active for Scope, Message, and Issue.
+`Up` and `Down` move backward and forward through fields, respectively, and wrap. When Footers or Staged changes is focused, they select a visibly highlighted item and leave the section at its boundaries. Preview scrolls with these keys while content remains above or below it; `Up` on its first line moves to Staged changes and `Down` at its end moves to Commit. `Home`/`End` jump within its real scroll bounds. `Enter` opens an expanded preview from Preview. `Tab` and `Shift+Tab` always move focus. Typing or pasting while Type is focused opens its popup search. Text input is otherwise active for Scope, Message, Body, and Issue.
+
+## Expanded preview
+
+The expanded preview is a read-only overlay over the current form. It displays the exact canonical message, including body and ordered footers. `Up`/`Down` scroll, `Home`/`End` jump to its bounds, and `Enter` or `Esc` closes it without losing form state. `F1` opens help while preserving the overlay and scroll position. `Ctrl+Enter` follows normal validation and submission behavior.
+
+## Body and footers
+
+Body accepts multiline text and preserves paragraph breaks. Its cursor and viewport follow the active line. Footers are shown in order and keep the selected entry visible. `A` opens a footer-name picker containing `BREAKING CHANGE`, `Closes`, `Fixes`, `Refs`, `Co-authored-by`, and a custom-name choice for any other trailer. `Enter` edits the selected footer, with Footer name, multiline Value, and Save footer controls; `Space` creates or edits the one `BREAKING CHANGE` footer; `Delete` removes the selected footer; `Ctrl+Up` and `Ctrl+Down` reorder it. The modal keeps edits isolated until Save, and help preserves its state.
 
 ## Keyboard behavior
 

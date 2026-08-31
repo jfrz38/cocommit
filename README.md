@@ -1,6 +1,6 @@
 # 🥥 cocommit
 
-**Craft well-formatted Conventional Commit headers without leaving your terminal.**
+**Craft complete Conventional Commit messages without leaving your terminal.**
 
 [![CI](https://github.com/jfrz38/cocommit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jfrz38/cocommit/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/cocommit?logo=rust)](https://crates.io/crates/cocommit)
@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/github/license/jfrz38/cocommit)](LICENSE)
 [![MSRV](https://img.shields.io/badge/rustc-1.94.1%2B-blue)](https://www.rust-lang.org)
 
-`cocommit` is a small keyboard-driven terminal UI for reviewing and refining staged changes before creating Conventional Commit headers. It previews the message as you edit it, then delegates Git operations to your installed Git CLI.
+`cocommit` is a small keyboard-driven terminal UI for reviewing and refining staged changes before creating complete Conventional Commit messages. It previews the message as you edit it, then delegates Git operations to your installed Git CLI.
 
 The name combines **CO**nventional and **COMMIT**s, hence the coconut 🥥.
 
@@ -18,7 +18,7 @@ feat(api)!: add authentication (#123)
 
 ## Why cocommit?
 
-- Build valid Conventional Commit headers interactively.
+- Build valid Conventional Commit headers, bodies, and footers interactively.
 - Preview the final message before committing.
 - Review staged file states and aggregate line statistics, and unstage an accidental file without leaving the composer.
 - Preserve Git hooks, signing, credentials, and native output.
@@ -63,7 +63,7 @@ The type picker also accepts custom types. Scope, breaking marker, issue number,
 <type>(<scope>)<breaking>: <message> (#<issue>)
 ```
 
-Optional parts are omitted when unset. The message is required, and all text fields are one line. The preview updates after every edit.
+Optional parts are omitted when unset. The subject is required and one line; Body accepts paragraphs. The Footers section opens a structured modal editor for ordered trailers and multiline values. The preview updates after every edit.
 
 ### Command-line options
 
@@ -94,7 +94,7 @@ Invalid submission keeps the form open, displays a field-specific error, and foc
 |---|---|
 | Up / Down | Move between form fields and wrap around. In Staged changes, select the previous or next file; at either end, move to the adjacent form field. In the type picker, change the highlighted item. |
 | Tab / Shift+Tab | Move to the next or previous form field. |
-| Enter | Open the type picker, advance from a text field, select the highlighted type, or submit when Commit is focused. |
+| Enter | Open the type picker, advance from a text field, insert a body/footer-value newline, edit a footer, select the highlighted type, or submit when Commit is focused. |
 | Ctrl+Enter | Submit from any form field. |
 | Space | Toggle Breaking or Sign when focused; include or exclude the selected staged file; insert a space in text fields and the type-picker query. The last included file cannot be excluded. |
 | F1 | Open or close keyboard help without losing form state. |
@@ -103,6 +103,8 @@ Invalid submission keeps the form open, displays a field-specific error, and foc
 | Backspace / Delete / Home / End | Edit a text field or type-picker query. |
 
 Typing while Type is focused opens the picker and filters standard types with a case-insensitive prefix search. For example, `d` and `do` select `docs` by default; a query with no matching prefix can be selected as a custom type. cocommit is keyboard-driven and does not support mouse input.
+
+Focus `Footers` with `Tab`. `A` opens a picker with `BREAKING CHANGE`, `Closes`, `Fixes`, `Refs`, and `Co-authored-by`, plus any custom footer name. `Enter` edits the selected footer, `Space` starts a `BREAKING CHANGE` footer, `Delete` removes it, and `Ctrl+Up`/`Ctrl+Down` reorder it. In the footer modal, `Tab` changes Footer name, Value, and Save footer; `Enter` inserts a newline in Value and `Ctrl+Enter` saves. The preview can be focused and scrolled with `Up`/`Down`.
 
 The expanded layout shows a bounded, scrollable staged-change list with file count, `A/M/D/R` states, insertions, deletions, binary-file count, and inclusion checkboxes. Focus `Staged changes` with `Tab`; `Up`/`Down` select a visible file and move to Sign or Commit at the list boundaries, while `Home`/`End` move to its first/last item. Press `Space` to include or exclude the selected file. The working tree and Git index remain unchanged until Commit, when all excluded files are unstaged once before creating the commit. The final included file is protected. The layout switches to a compact, vertically scrolling view in smaller terminals without leaving unused space between Commit and Preview. Below `30x8`, it displays a resize instruction instead of the form.
 
@@ -163,7 +165,7 @@ After a valid submission, cocommit restores the terminal and runs `git commit` w
 
 ## v1 Limitations
 
-- The domain can render and submit complete messages with bodies and footers, but the current interface exposes header fields only. Multiline and footer editing arrives in Iteration 16; amend mode and empty commits are not supported.
+- Amend mode and empty commits are not supported.
 - cocommit does not stage files, render full diffs or history, manage branches, push, or create pull requests.
 - It does not replace Git identity, hooks, credentials, editors, or signing configuration.
 - AI-generated messages, changelog generation, dry runs, copy-only mode, and CLI field prefills are not supported.
