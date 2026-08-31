@@ -1,55 +1,181 @@
 use std::fs;
 
-use super::{Config, config_path, load_from_path, parse};
+use super::{
+    Capitalization, Config, IssueStyle, TerminalPunctuation, global_config_path, load_from_paths,
+    repository_config_path,
+};
 
 #[test]
-fn defaults_signing_to_enabled() {
-    assert_eq!(Config::default(), Config { sign: true });
+fn defaults_preserve_the_existing_signing_and_message_behavior() {
+    let config = Config::default();
+
+    assert!(config.ui.sign);
+    assert_eq!(config.message.types[0], "feat");
+    assert!(config.message.scope_suggestions.is_empty());
+    assert_eq!(config.message.issue.prefix, "#");
+    assert_eq!(config.message.issue.style, IssueStyle::Parenthesized);
 }
 
 #[test]
-fn parses_empty_toml_with_defaults() {
-    assert_eq!(parse(""), Ok(Config::default()));
-}
-
-#[test]
-fn parses_explicit_signing_preference() {
-    assert_eq!(parse("sign = true"), Ok(Config { sign: true }));
-}
-
-#[test]
-fn rejects_malformed_toml() {
-    assert!(parse("sign =").is_err());
-}
-
-#[test]
-fn rejects_unknown_configuration_keys() {
-    assert!(parse("unknown = true").is_err());
-}
-
-#[test]
-fn defaults_when_configuration_file_is_missing() {
+fn loads_legacy_global_signing_preference() {
     let directory = tempfile::tempdir().expect("temporary directory should be created");
-    let path = directory.path().join("config.toml");
+    let global = directory.path().join("global.toml");
+    fs::write(&global, "sign = false").expect("global configuration should be written");
 
-    assert_eq!(load_from_path(&path).unwrap(), Config::default());
+    let config = load_from_paths(Some(&global), directory.path()).unwrap();
+
+    assert!(!config.ui.sign);
 }
 
 #[test]
-fn includes_path_when_configuration_file_cannot_be_read() {
+fn repository_policy_overrides_global_policy_by_field() {
     let directory = tempfile::tempdir().expect("temporary directory should be created");
-    let path = directory.path().join("config.toml");
-    fs::create_dir(&path).expect("configuration path should be a directory");
+    let global = directory.path().join("global.toml");
+    fs::write(
+        &global,
+        r#"schema_version = 1
 
-    let error =
-        load_from_path(&path).expect_err("directory cannot be read as a configuration file");
+[ui]
+sign = false
 
-    assert!(error.to_string().contains(&path.display().to_string()));
+[message]
+types = ["feat", "fix"]
+scope_suggestions = ["api", "cli"]
+
+[message.subject]
+max_length = 72
+capitalization = "lowercase"
+
+[message.issue]
+prefix = "PROJ-"
+style = "plain"
+"#,
+    )
+    .expect("global configuration should be written");
+    fs::write(
+        repository_config_path(directory.path()),
+        r#"schema_version = 1
+
+[message]
+types = ["docs"]
+scope_suggestions = []
+
+[message.subject]
+terminal_punctuation = "forbid"
+
+[message.issue]
+style = "parenthesized"
+"#,
+    )
+    .expect("repository configuration should be written");
+
+    let config = load_from_paths(Some(&global), directory.path()).unwrap();
+
+    assert!(!config.ui.sign);
+    assert_eq!(config.message.types, ["docs"]);
+    assert!(config.message.scope_suggestions.is_empty());
+    assert_eq!(config.message.subject.max_length, Some(72));
+    assert_eq!(
+        config.message.subject.capitalization,
+        Capitalization::Lowercase
+    );
+    assert_eq!(
+        config.message.subject.terminal_punctuation,
+        TerminalPunctuation::Forbid
+    );
+    assert_eq!(config.message.issue.prefix, "PROJ-");
+    assert_eq!(config.message.issue.style, IssueStyle::Parenthesized);
+}
+
+#[test]
+fn missing_configuration_files_use_defaults() {
+    let directory = tempfile::tempdir().expect("temporary directory should be created");
+
+    assert_eq!(
+        load_from_paths(None, directory.path()).unwrap(),
+        Config::default()
+    );
+}
+
+#[test]
+fn reports_configuration_paths_for_read_and_parse_failures() {
+    let directory = tempfile::tempdir().expect("temporary directory should be created");
+    let global = directory.path().join("global.toml");
+    fs::create_dir(&global).expect("configuration path should be a directory");
+    let error = load_from_paths(Some(&global), directory.path()).unwrap_err();
+    assert!(error.to_string().contains(&global.display().to_string()));
+
+    let repository = repository_config_path(directory.path());
+    fs::write(&repository, "schema_version =").expect("repository configuration should be written");
+    let error = load_from_paths(None, directory.path()).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains(&repository.display().to_string())
+    );
+}
+
+#[test]
+fn rejects_unknown_keys_at_every_schema_level() {
+    let directory = tempfile::tempdir().expect("temporary directory should be created");
+    let global = directory.path().join("global.toml");
+    for contents in [
+        "schema_version = 1\nunknown = true",
+        "schema_version = 1\n[ui]\nunknown = true",
+        "schema_version = 1\n[message]\nunknown = true",
+        "schema_version = 1\n[message.subject]\nunknown = true",
+        "schema_version = 1\n[message.issue]\nunknown = true",
+    ] {
+        fs::write(&global, contents).expect("global configuration should be written");
+        assert!(load_from_paths(Some(&global), directory.path()).is_err());
+    }
+}
+
+#[test]
+fn rejects_invalid_schema_versions_and_mixed_legacy_configuration() {
+    let directory = tempfile::tempdir().expect("temporary directory should be created");
+    let global = directory.path().join("global.toml");
+    for contents in [
+        "schema_version = 0",
+        "schema_version = 2",
+        "[message]\ntypes = [\"feat\"]",
+        "schema_version = 1\nsign = false",
+    ] {
+        fs::write(&global, contents).expect("global configuration should be written");
+        assert!(load_from_paths(Some(&global), directory.path()).is_err());
+    }
+
+    fs::write(
+        repository_config_path(directory.path()),
+        "[message]\ntypes = [\"feat\"]",
+    )
+    .expect("repository configuration should be written");
+    assert!(load_from_paths(None, directory.path()).is_err());
+}
+
+#[test]
+fn rejects_invalid_policy_values_with_their_repository_path() {
+    let directory = tempfile::tempdir().expect("temporary directory should be created");
+    let repository = repository_config_path(directory.path());
+    fs::write(&repository, "schema_version = 1\n[message]\ntypes = []")
+        .expect("repository configuration should be written");
+
+    let error = load_from_paths(None, directory.path()).unwrap_err();
+
+    let message = format!("{error:#}");
+    assert!(message.contains(&repository.display().to_string()));
+    assert!(message.contains("types cannot be empty"));
+}
+
+#[test]
+fn repository_configuration_path_uses_work_tree_root() {
+    let root = std::path::Path::new("repository");
+    assert_eq!(repository_config_path(root), root.join(".cocommit.toml"));
 }
 
 #[test]
 fn global_configuration_path_uses_cocommit_directory() {
-    if let Some(path) = config_path() {
+    if let Some(path) = global_config_path() {
         assert!(path.ends_with("cocommit/config.toml"));
     }
 }

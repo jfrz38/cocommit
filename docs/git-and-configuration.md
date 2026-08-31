@@ -72,7 +72,7 @@ Disabled does not force an unsigned commit. Git may still sign through `commit.g
 
 `--no-gpg-sign` is not used in v1. A three-state signing preference is a possible future enhancement, not a current need.
 
-## Global configuration
+## Configuration layers
 
 The configuration file is resolved with `dirs::config_dir()`:
 
@@ -88,7 +88,9 @@ Typical paths are:
 | macOS | `~/Library/Application Support/cocommit/config.toml` |
 | Windows | `%APPDATA%\cocommit\config.toml` |
 
-Initial schema:
+The effective configuration merges built-in defaults, the optional global file, then the optional repository file. A future CLI override layer will have the highest precedence, but no CLI configuration arguments exist yet. Scalars and nested fields override only when present. Lists replace the complete lower-priority list; `scope_suggestions = []` intentionally clears inherited suggestions.
+
+The global file owns individual UI preferences. Its legacy schema remains valid:
 
 ```toml
 sign = true
@@ -98,20 +100,58 @@ sign = true
 #[derive(Debug, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
-    pub sign: bool,
+    pub ui: UiPreferences,
+    pub message: MessagePolicy,
 }
 ```
 
 Rules:
 
-- Missing config file or unavailable config directory: use defaults.
-- The default enables `Sign (-S)`; set `sign = false` to disable the explicit `-S` request.
+- Missing global file or unavailable config directory: use defaults.
+- The default enables `Sign (-S)`; legacy `sign = false` disables the explicit `-S` request.
 - Existing unreadable file: return an actionable error with its path.
-- Invalid TOML or unknown keys: return a parse error rather than silently ignore a typo.
+- Invalid TOML, unsupported schema versions, and unknown keys: return a parse error rather than silently ignore a typo.
 - Do not create config files or directories automatically.
-- Keep only cocommit UI preferences here. Git identity, keys, hooks, and signing infrastructure remain Git's responsibility.
+- Git identity, keys, hooks, and signing infrastructure remain Git's responsibility.
 
-Repository-local configuration, configurable type lists, scope suggestions, and `issue_format` are deliberately deferred. Adding them later requires explicit precedence and migration rules; v1 should not guess those rules.
+New configuration files use versioned TOML. The global file may contain UI and message defaults:
+
+```toml
+schema_version = 1
+
+[ui]
+sign = true
+
+[message]
+types = ["feat", "fix", "docs", "chore"]
+scope_suggestions = ["api", "tui"]
+
+[message.subject]
+max_length = 72
+capitalization = "lowercase" # allow | lowercase | uppercase
+terminal_punctuation = "forbid" # allow | forbid | require
+
+[message.issue]
+prefix = "PROJ-"
+style = "plain" # parenthesized | plain
+```
+
+The repository policy is always `<work-tree-root>/.cocommit.toml`, where Git resolves the root for subdirectories and linked worktrees. It accepts only `[message]`, never `[ui]` or legacy `sign`:
+
+```toml
+schema_version = 1
+
+[message]
+types = ["feat", "fix", "docs"]
+scope_suggestions = []
+
+[message.subject]
+max_length = 72
+```
+
+`types` is the future allowed-type list and cannot be empty. Scope suggestions are never a restriction. Issue identifiers will remain decimal numbers; `prefix` and `style` support common renderings without templates or regular expressions. The only supported scope syntax is `type(scope): subject`; `[]` and `<>` are deliberately not configurable.
+
+Iteration 14 loads and validates these policies but does not apply them to the current picker, validation, preview, or rendered Git message. That enforcement is deferred to Iteration 17, preserving the current formatter as the only active path. The legacy global file must be migrated manually from `sign = false` to `[ui]\nsign = false` before adding schema-versioned fields. No file is rewritten automatically.
 
 ## Validation contract
 

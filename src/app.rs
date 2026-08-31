@@ -4,12 +4,11 @@ use tui_input::{Input, InputRequest};
 
 use crate::{
     commit::{CommitDraft, DraftField, ValidationError, ValidationErrorKind},
+    config::DEFAULT_TYPES,
     git::{StagedChanges, StagedFile},
 };
 
-pub const STANDARD_TYPES: [&str; 11] = [
-    "feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert",
-];
+pub use crate::config::DEFAULT_TYPES as STANDARD_TYPES;
 pub const MAX_TYPE_LENGTH: usize = 64;
 pub const MAX_SCOPE_LENGTH: usize = 128;
 pub const MAX_MESSAGE_LENGTH: usize = 512;
@@ -92,13 +91,13 @@ impl TypePickerState {
     pub fn choices(&self) -> Vec<TypeChoice> {
         let query = self.query.to_string();
         let query_lower = query.to_lowercase();
-        let mut choices = STANDARD_TYPES
+        let mut choices = DEFAULT_TYPES
             .iter()
             .filter(|commit_type| commit_type.starts_with(&query_lower))
             .map(|commit_type| TypeChoice::Standard((*commit_type).to_owned()))
             .collect::<Vec<_>>();
 
-        if !query.is_empty() && !STANDARD_TYPES.contains(&query.as_str()) {
+        if !query.is_empty() && !DEFAULT_TYPES.contains(&query.as_str()) {
             choices.push(TypeChoice::CustomQuery(query));
         }
 

@@ -97,6 +97,42 @@ fn preflight_reports_the_failing_git_command_outside_a_repository() {
 }
 
 #[test]
+fn resolves_the_work_tree_root_from_subdirectories_and_linked_worktrees() {
+    if !require_git() {
+        return;
+    }
+    let parent = tempdir().expect("temporary repository parent should be created");
+    let repository = parent.path().join(" repository");
+    fs::create_dir(&repository).expect("repository directory should be created");
+    run_git(&repository, ["init"]);
+    configure_identity(&repository);
+    fs::write(repository.join("baseline.txt"), "baseline\n")
+        .expect("baseline file should be written");
+    run_git(&repository, ["add", "baseline.txt"]);
+    run_git(&repository, ["commit", "-m", "chore: baseline"]);
+
+    let nested = repository.join("nested");
+    fs::create_dir(&nested).expect("nested directory should be created");
+    assert_eq!(cocommit::git::work_tree_root(&nested).unwrap(), repository);
+
+    let linked_parent = tempdir().expect("linked worktree parent should be created");
+    let linked = linked_parent.path().join("linked");
+    run_git_slice(
+        &repository,
+        [
+            "worktree",
+            "add",
+            "-b",
+            "linked-worktree",
+            linked
+                .to_str()
+                .expect("temporary path should be valid Unicode"),
+        ],
+    );
+    assert_eq!(cocommit::git::work_tree_root(&linked).unwrap(), linked);
+}
+
+#[test]
 fn staged_change_summary_matches_git_for_common_index_changes() {
     if !require_git() {
         return;
@@ -233,6 +269,14 @@ fn require_git() -> bool {
 }
 
 fn run_git<const N: usize>(repository: &Path, arguments: [&str; N]) {
+    run_git_slice(repository, arguments);
+}
+
+fn run_git_slice<I, S>(repository: &Path, arguments: I)
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
     let status = Command::new("git")
         .current_dir(repository)
         .args(arguments)

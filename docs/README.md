@@ -18,7 +18,7 @@ Read the documents in this order:
 
 - Initial planning: complete
 - Rust implementation: complete through Phase 9
-- Current work: pre-release roadmap, Iterations 10 release control, 11 CLI contract and diagnostics, 12 terminal and input hardening, and 13 staged-change context complete; Iteration 14 repository-local configuration is next
+- Current work: pre-release roadmap, Iterations 10 through 14 complete; Iteration 15 complete commit-message domain is next
 - Release status: private pre-release; no public package or release exists
 - Supported scope: Conventional Commit header creation from already staged changes
 

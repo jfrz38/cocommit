@@ -4,7 +4,7 @@ use std::{
     ffi::OsString,
     fmt::Write,
     io,
-    path::Path,
+    path::{Path, PathBuf},
     process::{Command, Output},
 };
 
@@ -158,6 +158,24 @@ pub fn preflight(working_directory: &Path) -> Result<StagedChanges> {
     }
 
     staged_changes(working_directory)
+}
+
+/// Resolves the containing Git work-tree root from any directory inside it.
+pub fn work_tree_root(working_directory: &Path) -> Result<PathBuf> {
+    let output = Command::new("git")
+        .current_dir(working_directory)
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+        .map_err(|error| git_start_error("git rev-parse --show-toplevel", error))?;
+    if !output.status.success() {
+        return Err(git_failure("git rev-parse --show-toplevel", &output));
+    }
+
+    let root = output.stdout.strip_suffix(b"\n").unwrap_or(&output.stdout);
+    if root.is_empty() {
+        bail!("git rev-parse --show-toplevel returned an empty work-tree root");
+    }
+    Ok(PathBuf::from(path_from_git(root)))
 }
 
 /// Reads a display-safe, read-only snapshot of the staged Git index.
