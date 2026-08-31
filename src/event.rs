@@ -31,12 +31,6 @@ fn map_key(key: KeyEvent) -> Option<AppEvent> {
         }
         (KeyCode::Enter, _) => Some(AppEvent::Enter),
         (KeyCode::Char(' '), _) => Some(AppEvent::Space),
-        (KeyCode::Up, modifiers) if modifiers.contains(KeyModifiers::CONTROL) => {
-            Some(AppEvent::MoveFooter(-1))
-        }
-        (KeyCode::Down, modifiers) if modifiers.contains(KeyModifiers::CONTROL) => {
-            Some(AppEvent::MoveFooter(1))
-        }
         (KeyCode::Up, _) => Some(AppEvent::Up),
         (KeyCode::Down, _) => Some(AppEvent::Down),
         (KeyCode::Backspace, _) => Some(AppEvent::Edit(Edit::Backspace)),

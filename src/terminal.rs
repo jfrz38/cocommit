@@ -93,12 +93,10 @@ impl TerminalSession {
         }
     }
 
-    fn draw(&mut self, app: &mut App) -> Result<()> {
-        let mut preview_limits = ui::PreviewScrollLimits::default();
+    fn draw(&mut self, app: &App) -> Result<()> {
         self.terminal
-            .draw(|frame| preview_limits = ui::render(frame, app))
+            .draw(|frame| ui::render(frame, app))
             .context("failed to draw terminal UI")?;
-        app.set_preview_scroll_limits(preview_limits.form, preview_limits.expanded);
         Ok(())
     }
 

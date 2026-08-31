@@ -1,6 +1,6 @@
 # Releasing cocommit
 
-> **Pre-release policy:** `cocommit` must not create a tag, GitHub Release, or crates.io package until Iterations 10 through 23 and the `0.1.0` release gate in the [roadmap](roadmap.md) are complete. The workflows below are hardened for the approved automatic GitHub Release flow, but must be rehearsed privately before their first use.
+> **Pre-release policy:** `cocommit` must not create a tag, GitHub Release, or crates.io package until Iterations 10 through 22 and the `0.1.0` release gate in the [roadmap](roadmap.md) are complete. The workflows below are hardened for the approved automatic GitHub Release flow, but must be rehearsed privately before their first use.
 
 `cocommit` uses three separate GitHub Actions workflows so each release boundary is explicit:
 
