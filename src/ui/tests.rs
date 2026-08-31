@@ -2,6 +2,10 @@ use ratatui::{Terminal, backend::TestBackend};
 use tui_input::Input;
 
 use super::*;
+use crate::{
+    commit::Footer,
+    config::{Capitalization, MessagePolicy, SubjectPolicy, TerminalPunctuation},
+};
 
 fn draw(app: &App, width: u16, height: u16) {
     let _ = rendered(app, width, height);
@@ -49,7 +53,7 @@ fn renders_staged_change_counts_and_a_scrolled_file_list() {
     app.staged_selected = 9;
 
     let output = rendered(&app, 100, 40);
-    assert!(output.contains("Staged changes"));
+    assert!(output.contains("Staged"));
     assert!(output.contains("A:10 M:0 D:0 R:0"));
     assert!(output.contains("> [x] A src/archivo-9.rs"));
     assert!(output.contains("archivo-9.rs"));
@@ -67,6 +71,23 @@ fn renders_error_only_after_validation_fails() {
     let output = rendered(&app, 100, 40);
     assert!(output.contains("Error"));
     assert!(output.contains("Message is required"));
+}
+
+#[test]
+fn renders_subject_indicator_for_the_active_policy() {
+    let policy = MessagePolicy {
+        subject: SubjectPolicy {
+            max_length: Some(72),
+            capitalization: Capitalization::Lowercase,
+            terminal_punctuation: TerminalPunctuation::Forbid,
+        },
+        ..MessagePolicy::default()
+    };
+    let mut app = App::new(false).with_message_policy(&policy);
+    app.form.message = Input::new("add footer editor".to_owned());
+
+    let output = rendered(&app, 100, 40);
+    assert!(output.contains("Subject 17/72; lowercase; no terminal punctuation"));
 }
 
 #[test]
@@ -122,17 +143,18 @@ fn keeps_preview_below_commit_in_a_tall_compact_terminal() {
     let width = 40usize;
     let output = rendered(&app, width as u16, 40);
     let commit = output.find("[ Commit ]").expect("Commit should render") / width;
-    let preview = output.find("Preview:").expect("preview should render") / width;
+    let preview = output.find("Preview 1/").expect("preview should render") / width;
 
     assert_eq!(preview, commit + 1);
 }
 
 #[test]
 fn renders_staged_detail_at_the_compact_layout_boundary() {
-    let app = App::new(false);
+    let mut app = App::new(false);
+    app.focus = Focus::StagedChanges;
     let output = rendered(&app, 50, 30);
 
-    assert!(output.contains("Staged changes"));
+    assert!(output.contains("Staged"));
 }
 
 #[test]
@@ -165,9 +187,12 @@ fn renders_every_focus_with_long_unicode_input_and_error() {
         Focus::Scope,
         Focus::Breaking,
         Focus::Message,
+        Focus::Body,
+        Focus::Footers,
         Focus::Issue,
         Focus::Sign,
         Focus::StagedChanges,
+        Focus::Preview,
         Focus::Submit,
     ] {
         app.focus = focus;
@@ -183,6 +208,77 @@ fn renders_maximum_length_unicode_input_without_overflowing_scroll_values() {
 
     draw(&app, 30, 8);
     draw(&app, 100, 40);
+}
+
+#[test]
+fn renders_footer_editor_with_multiline_wide_unicode_content() {
+    let mut app = App::new(false);
+    app.form.body = Input::new("Details\nfor ��� users".to_owned());
+    app.form.footers = (0..31)
+        .map(|index| Footer::new(format!("Refs-{index}"), "界\nvalue".to_owned()))
+        .collect();
+    app.focus = Focus::Footers;
+    app.handle(crate::app::AppEvent::Enter);
+
+    let output = rendered(&app, 100, 40);
+    assert!(output.contains("Footer editor"));
+    assert!(output.contains("Footer name"));
+    assert!(output.contains("Save footer"));
+}
+
+#[test]
+fn multiline_cursor_moves_to_its_text_line_and_the_selected_footer_stays_visible() {
+    let input = Input::new("first\n界界\nlast".to_owned());
+    let view = super::multiline_view(&input, Rect::new(0, 0, 10, 2));
+    assert_eq!(view.row, 1);
+    assert_eq!(view.column, 4);
+
+    let mut app = App::new(false);
+    app.form.footers = (0..10)
+        .map(|index| Footer::new(format!("Refs-{index}"), format!("#{index}")))
+        .collect();
+    app.focus = Focus::Footers;
+    app.footer_selected = 9;
+    let output = rendered(&app, 100, 40);
+    assert!(output.contains("Refs-9: #9"));
+}
+
+#[test]
+fn compact_footer_summary_uses_zero_when_no_footer_is_selected() {
+    let mut app = App::new(false);
+    app.focus = Focus::Footers;
+
+    let output = rendered(&app, 40, 12);
+    assert!(output.contains("Footers    0/0"));
+}
+
+#[test]
+fn preview_viewport_clamps_scroll_and_counts_wide_wrapped_lines() {
+    let viewport = super::preview_viewport("header\n界界界界\nfooter", Rect::new(0, 0, 4, 2), 99);
+
+    assert_eq!(viewport.total_lines, 6);
+    assert_eq!(viewport.scroll, 4);
+    assert_eq!(viewport.first_line, 5);
+    assert_eq!(viewport.last_line, 6);
+    assert!(viewport.has_hidden_content);
+}
+
+#[test]
+fn renders_an_adaptive_preview_and_the_expanded_view() {
+    let mut app = App::new(false);
+    app.form.message = Input::new("add endpoint".to_owned());
+    app.form.body = Input::new("Details\n".repeat(20));
+    app.form.footers = vec![Footer::new("Closes".to_owned(), "#42".to_owned())];
+    app.focus = Focus::Preview;
+
+    let panel = rendered(&app, 100, 60);
+    assert!(panel.contains("Preview 1/"));
+    assert!(panel.contains("Enter expand"));
+
+    app.handle(crate::app::AppEvent::Enter);
+    let expanded = rendered(&app, 100, 40);
+    assert!(expanded.contains("Home/End start/end"));
+    assert!(expanded.contains("Closes: #42"));
 }
 
 #[test]
