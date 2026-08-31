@@ -74,11 +74,14 @@ Test state transitions directly:
 - Type picker opens and closes correctly.
 - Filtering selects a standard type or custom query.
 - Submit validation focuses the first invalid field.
+- Body paste preserves normalized line breaks, while one-line fields still collapse them.
+- Footer creation, editing, cancellation, deletion, breaking-change shortcut, and reordering preserve the canonical preview.
+- Preview opens an expanded read-only view, preserves it through help, bounds scrolling to wrapped Unicode content, and resets its position when the draft changes.
 - Cancel produces `AppAction::Cancel`.
 - NUL, escape, and other control characters are rejected from edits and paste without changing the field.
 - Field and paste limits reject the whole input without partial insertion, including Unicode input counted as characters rather than bytes.
 
-Use `ratatui::backend::TestBackend` for narrow render smoke tests: normal terminal, compact terminal with vertical scroll, too-small terminal, form mode, picker mode, and a long staged-change list. Assert that rendering does not panic; do not snapshot the entire screen.
+Use `ratatui::backend::TestBackend` for narrow render smoke tests: normal terminal, compact terminal with vertical scroll, too-small terminal, form mode, picker mode, footer modal, expanded preview, long bodies, many footers, wide Unicode text, and a long staged-change list. Assert that rendering does not panic; do not snapshot the entire screen.
 
 ## Git integration test
 
@@ -109,7 +112,22 @@ cargo build --locked --all-targets --all-features
 
 GitHub Actions runs `make check` on Ubuntu for pull requests to `develop` and `main`, every Monday at 06:00 UTC, and on manual dispatch. Windows and macOS run `cargo check --workspace --all-targets --all-features --locked` for pull requests to `main`, scheduled runs, and manual dispatch; this preserves portability coverage without depending on GNU Make.
 
-Before release, run manual smoke tests on a real repository for cancel, valid unsigned commit, explicit signing, Git hook rejection, no staged changes, non-repository invocation, small terminal, bounded pasted text, and forced termination. On Unix, verify restoration after a supported external termination signal; on all platforms, verify cancellation with `Ctrl+C` through the event loop.
+Before release, run manual smoke tests on a real repository for cancel, valid unsigned commit, explicit signing, Git hook rejection, no staged changes, non-repository invocation, small terminal, bounded pasted text, and forced termination. The complete-message check must enter a multiline body and an ordered multiline footer through the footer modal, then compare `git log -1 --format='%B'` with Preview. On Unix, verify restoration after a supported external termination signal; on all platforms, verify cancellation with `Ctrl+C` through the event loop.
+
+From Git Bash or zsh at the project root, create an isolated manual-test repository:
+
+```bash
+project_root="$PWD"
+sandbox="$(mktemp -d)"
+git -C "$sandbox" init
+git -C "$sandbox" config user.name "Cocommit Test"
+git -C "$sandbox" config user.email "cocommit@example.com"
+printf 'visual test\n' > "$sandbox/demo.txt"
+git -C "$sandbox" add demo.txt
+(cd "$sandbox" && cargo run --quiet --locked --manifest-path "$project_root/Cargo.toml")
+git -C "$sandbox" log -1 --format='%B'
+git -C "$sandbox" show --stat --oneline HEAD
+```
 
 ## Release workflow rehearsal
 

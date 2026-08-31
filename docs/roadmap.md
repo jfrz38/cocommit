@@ -211,7 +211,7 @@ Completion criteria:
 
 ### Iteration 16: Multiline and footer TUI
 
-Status: next.
+Status: implementation complete; manual visual check pending.
 
 After the domain is stable, the terminal interface can expose complete message editing.
 
