@@ -46,9 +46,9 @@ tests/
 | `main.rs` | Orchestrates preflight, config loading, terminal lifecycle, TUI results, index operations, and final Git execution. |
 | `cli.rs` | Parses the small command-line contract and provides usage text without terminal or Git dependencies. |
 | `commit.rs` | Defines the complete commit draft, canonical rendering, and validation. Has no terminal or Git dependency. |
-| `config.rs` | Defines layered UI preferences and message policy, resolves global and repository paths, parses versioned TOML, and merges configuration. |
+| `config.rs` | Defines layered global UI preferences and repository message policy; Iteration 17 will add optional-section visibility; resolves paths, parses versioned TOML, and merges configuration. |
 | `git.rs` | Runs explicit Git commands, interprets exit statuses, constructs `git commit` and literal unstage arguments, and reads the staged index. |
-| `app.rs` | Holds editable form state, staged-file inclusion choices, focus, popup state, feedback, and pure state transitions. |
+| `app.rs` | Holds editable form state, staged-file inclusion choices, focus, popup state, feedback, and pure state transitions; Iteration 17 will make focus and staged inclusion conditional on visible sections. |
 | `event.rs` | Maps Crossterm events to small application actions. |
 | `ui.rs` | Renders the form, preview, type picker, status, and footer from `App`. |
 | `terminal.rs` | Owns raw mode, alternate screen, cursor restoration, panic and Unix-signal cleanup, and the synchronous event loop boundary. |
@@ -107,14 +107,22 @@ pub enum Focus {
     Scope,
     Breaking,
     Message,
+    Body,
+    Footers,
     Issue,
     Sign,
+    StagedChanges,
+    Preview,
     Submit,
 }
 
 pub enum Mode {
     Form,
     TypePicker(TypePickerState),
+    FooterNamePicker(FooterNamePickerState),
+    FooterEditor(FooterEditorState),
+    PreviewExpanded,
+    Help(Box<Mode>),
 }
 
 pub enum AppAction {
@@ -124,7 +132,7 @@ pub enum AppAction {
 }
 ```
 
-`FormState` contains the editable header widgets, multiline body, and ordered `Footer` values, then converts them into `CommitDraft`. The footer modal is UI state only; preview and submission still use the domain renderer.
+`FormState` contains the editable header widgets, multiline body, and ordered `Footer` values, then converts them into `CommitDraft`. The footer modal is UI state only; preview and submission still use the domain renderer. Iteration 17 will pass effective global UI preferences to `App` and derive its navigable focus candidates from their visible sections. A hidden optional section will be initialized absent and cannot remain focused or expose an action; staged inclusion state will exist only while Staged changes is visible.
 
 ## Main flow
 
@@ -137,7 +145,7 @@ parse CLI -> verify interactive streams -> preflight Git -> load config -> initi
 
 The terminal is restored before invoking Git. This is essential for hooks, signing prompts, pinentry, and normal Git output.
 
-Before loading repository configuration, `main` asks Git for the work-tree root. `config` merges built-in defaults, global preferences, and the root `.cocommit.toml` policy without depending on terminal rendering or message formatting. The UI displays the effective subject policy as guidance, while the domain model does not enforce any policy until Iteration 17; this preserves one active validation and formatting path.
+Before loading repository configuration, `main` asks Git for the work-tree root. `config` merges built-in defaults, global preferences, and the root `.cocommit.toml` policy without depending on terminal rendering or message formatting. Iteration 17 will pass global section visibility to `App`; repository policy cannot alter it. The UI displays the effective subject policy as guidance, while the domain model does not enforce any policy until Iteration 18; this preserves one active validation and formatting path.
 
 Help and version exit before the interactive-stream and Git checks. Usage errors exit before terminal initialization. The executable maps usage errors to exit code `2`, while operational failures use `1` and successful cancellation uses `0`.
 
