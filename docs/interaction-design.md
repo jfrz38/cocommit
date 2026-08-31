@@ -45,7 +45,7 @@ Focus advances in this order:
 Type -> Scope -> Breaking -> Message -> Body -> Footers -> Issue -> Sign -> Staged changes -> Preview -> Submit
 ```
 
-`Up` and `Down` move backward and forward through fields, respectively, and wrap. When Footers or Staged changes is focused, they select a visibly highlighted item and leave the section at its boundaries. Preview scrolls with these keys and `Home`/`End` request its beginning/end; scroll rendering is bounded to real content. `Enter` opens an expanded preview from Preview. `Tab` and `Shift+Tab` always move focus. Typing or pasting while Type is focused opens its popup search. Text input is otherwise active for Scope, Message, Body, and Issue.
+`Up` and `Down` move backward and forward through fields, respectively, and wrap. When Footers or Staged changes is focused, they select a visibly highlighted item and leave the section at its boundaries. Preview scrolls with these keys while content remains above or below it; `Up` on its first line moves to Staged changes and `Down` at its end moves to Commit. `Home`/`End` jump within its real scroll bounds. `Enter` opens an expanded preview from Preview. `Tab` and `Shift+Tab` always move focus. Typing or pasting while Type is focused opens its popup search. Text input is otherwise active for Scope, Message, Body, and Issue.
 
 ## Expanded preview
 
