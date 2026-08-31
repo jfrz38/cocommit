@@ -55,8 +55,7 @@ feat(api): add authentication (#123)
 - Commit body, footers, amend mode, empty commits, or changelog generation.
 - AI-generated messages.
 - Replacing Git hooks, credentials, signing, or editor workflows.
-- Repository-local configuration.
-- Configurable types, scopes, or issue formatting.
+- Applying repository message policy to type selection, validation, or rendering. The policy schema and precedence are available, but enforcement is deferred to Iteration 17.
 - Dry-run, copy-only mode, or CLI prefill arguments.
 
 These ideas may be reconsidered only after the focused commit-header workflow is stable.

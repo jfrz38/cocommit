@@ -28,13 +28,14 @@ The expected rendered string must be asserted exactly.
 
 Separate TOML parsing from filesystem access. Test:
 
-- Defaults with no input.
-- Empty TOML.
-- `sign = true`.
-- Malformed TOML.
-- Unknown key rejection.
-- Missing file produces defaults.
-- Read failure carries the config path.
+- Defaults with no input and legacy global `sign` compatibility.
+- Schema-1 global and repository parsing, including all nested tables.
+- Field-by-field precedence, list replacement, and intentionally empty scope suggestions.
+- Rejection of missing, mixed, unsupported, and future schema versions.
+- Unknown key rejection at every table level.
+- Missing file produces defaults; invalid or unreadable files carry their path and source error.
+- Empty type lists and zero subject limits are rejected.
+- Git root resolution from a repository root, subdirectory, and linked worktree.
 
 ### Git module
 
