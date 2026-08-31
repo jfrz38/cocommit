@@ -11,7 +11,7 @@ The interface remains compact and needs no mouse support.
 │ Breaking   [ ]                            │
 │ Message                                   │
 │ Issue                                     │
-│ Sign (-S)  [ ]                            │
+│ Sign commit [ ]                            │
 │                                            │
 │ Staged changes                              │
 │ 3 files  A:1 M:1 D:0 R:1  +12 -4           │

@@ -28,7 +28,7 @@ Message policy records configurable allowed types, scope suggestions, subject po
 ## Consequences
 
 - Repositories can version their future conventions without sharing a user's signing preference.
-- Empty or absent files preserve existing behavior, including the standard type list, `(#123)` issues, and explicit signing enabled.
+- Empty or absent files preserve existing behavior, including the standard type list, `(#123)` issues, and signing enabled.
 - Lists have predictable override semantics and can be intentionally cleared.
 - Existing global `sign` users remain compatible, but must migrate manually to `[ui]` before adding schema-versioned policy.
 - Non-parenthesized scope delimiters are intentionally unsupported because they are not Conventional Commits syntax.

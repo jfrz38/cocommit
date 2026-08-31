@@ -57,7 +57,7 @@ The form starts with the `feat` type and an empty message. It supports the stand
 feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
 ```
 
-The type picker also accepts custom types. Scope, breaking marker, issue number, and explicit signing are optional. The rendered header is:
+The type picker also accepts custom types. Scope, breaking marker, issue number, and signing choice are optional. The rendered header is:
 
 ```text
 <type>(<scope>)<breaking>: <message> (#<issue>)
@@ -122,7 +122,7 @@ It is read from `<config-dir>/cocommit/config.toml`:
 | macOS | `~/Library/Application Support/cocommit/config.toml` |
 | Windows | `%APPDATA%\cocommit\config.toml` |
 
-Missing configuration, or an unavailable platform configuration directory, uses `sign = true`. Set `sign = false` to omit the explicit `-S` flag. This does not force an unsigned commit: Git's own `commit.gpgSign` setting can still apply.
+Missing configuration, or an unavailable platform configuration directory, uses `sign = true`. Set `sign = false` to initialize `Sign commit` as disabled; cocommit then passes `--no-gpg-sign`, overriding Git's `commit.gpgSign` setting for that commit.
 
 For repository conventions, add `.cocommit.toml` at the Git work-tree root. cocommit resolves that root through Git, so the same file applies when it runs from a subdirectory or linked worktree. Configuration precedence is built-in defaults, global configuration, then repository configuration; a future CLI layer will be higher priority. UI preferences remain global, while the repository file accepts only message policy:
 
@@ -163,7 +163,7 @@ After a valid submission, cocommit restores the terminal and runs `git commit` w
 
 ## v1 Limitations
 
-- Only Conventional Commit headers are supported; bodies, footers, amend mode, and empty commits are not supported.
+- The domain can render and submit complete messages with bodies and footers, but the current interface exposes header fields only. Multiline and footer editing arrives in Iteration 16; amend mode and empty commits are not supported.
 - cocommit does not stage files, render full diffs or history, manage branches, push, or create pull requests.
 - It does not replace Git identity, hooks, credentials, editors, or signing configuration.
 - AI-generated messages, changelog generation, dry runs, copy-only mode, and CLI field prefills are not supported.

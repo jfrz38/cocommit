@@ -14,7 +14,7 @@ Command::new("git")
     .status()
 ```
 
-The commit message is one argument even when it includes spaces or quotes.
+The complete commit message is one argument even when it includes spaces, quotes, Unicode, or line breaks.
 
 ## Preflight
 
@@ -52,25 +52,25 @@ Diagnostics keep Git's stderr for failed preflight commands. This preserves usef
 After a valid submit:
 
 1. Drop or explicitly restore `TerminalSession`.
-2. Build the exact `git commit` argument list.
+2. Build the exact `git commit` argument list with the canonical header, body, and footer renderer.
 3. Inherit stdin, stdout, and stderr from the parent process.
 4. Execute Git synchronously.
 5. Exit with success when its status is successful; otherwise return an error carrying Git's exit status.
 
 Do not capture and re-render Git stderr in the TUI. A hook, GPG, SSH signing, or pinentry may need a normal terminal. Restoring first also ensures Git output is not lost in Ratatui's alternate screen.
 
+The message model renders a present body and footer block with exactly one blank line between sections. Footer order is retained, and every footer is passed to Git inside the same `-m` argument as the header. `BREAKING CHANGE` and `BREAKING-CHANGE` are equivalent input tokens and render as `BREAKING CHANGE`; a header `!` may coexist with that footer.
+
 ## Signing semantics
 
-The UI setting is an explicit request to add `-S`:
+The UI setting is an explicit request to sign or not sign the commit:
 
-| UI value | Command |
+| `Sign commit` | Command |
 |---|---|
 | Enabled | `git commit -S -m <message>` |
-| Disabled | `git commit -m <message>` |
+| Disabled | `git commit --no-gpg-sign -m <message>` |
 
-Disabled does not force an unsigned commit. Git may still sign through `commit.gpgSign`; the UI label must say `Sign (-S)` rather than imply the setting controls all Git signing.
-
-`--no-gpg-sign` is not used in v1. A three-state signing preference is a possible future enhancement, not a current need.
+The binary toggle deliberately overrides `commit.gpgSign`: a disabled `Sign commit` requests an unsigned commit. cocommit has no "use Git default" state; use Git directly when that behavior is required.
 
 ## Configuration layers
 
@@ -108,7 +108,7 @@ pub struct Config {
 Rules:
 
 - Missing global file or unavailable config directory: use defaults.
-- The default enables `Sign (-S)`; legacy `sign = false` disables the explicit `-S` request.
+- The default enables `Sign commit`; legacy `sign = false` initializes an explicit unsigned request.
 - Existing unreadable file: return an actionable error with its path.
 - Invalid TOML, unsupported schema versions, and unknown keys: return a parse error rather than silently ignore a typo.
 - Do not create config files or directories automatically.

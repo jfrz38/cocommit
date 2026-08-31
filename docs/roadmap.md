@@ -186,6 +186,8 @@ Completion criteria:
 
 ### Iteration 15: Complete commit-message domain
 
+Status: complete.
+
 The domain model must represent the complete message before the TUI attempts to edit it.
 
 Work:
@@ -208,6 +210,8 @@ Completion criteria:
 - No temporary commit-message file or alternate transport is introduced without an explicit security and cleanup decision.
 
 ### Iteration 16: Multiline and footer TUI
+
+Status: next.
 
 After the domain is stable, the terminal interface can expose complete message editing.
 

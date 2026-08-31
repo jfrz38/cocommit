@@ -23,7 +23,7 @@ fn creates_an_unsigned_commit_in_a_temporary_repository() {
         repository.path(),
         ["config", "user.email", "cocommit@example.test"],
     );
-    run_git(repository.path(), ["config", "commit.gpgSign", "false"]);
+    run_git(repository.path(), ["config", "commit.gpgSign", "true"]);
 
     let hooks_directory = repository.path().join("empty-hooks");
     fs::create_dir(&hooks_directory).expect("empty hooks directory should be created");
@@ -45,17 +45,45 @@ fn creates_an_unsigned_commit_in_a_temporary_repository() {
     .expect("staged file should be written");
     run_git(repository.path(), ["add", "staged.txt"]);
 
-    let message = "feat: verify Git integration";
-    cocommit::git::commit(repository.path(), message, false)
+    let message = cocommit::commit::CommitDraft::new(
+        "feat".to_owned(),
+        None,
+        false,
+        "verify Git integration".to_owned(),
+        None,
+        Some("Preserve quotes and Unicode: \"ready\" for Marta García.".to_owned()),
+        vec![cocommit::commit::Footer::new(
+            "Closes".to_owned(),
+            "#42".to_owned(),
+        )],
+    )
+    .validated_message()
+    .expect("complete message should be valid");
+    cocommit::git::commit(repository.path(), &message, false)
         .expect("production Git commit should succeed");
 
     let output = Command::new("git")
         .current_dir(repository.path())
-        .args(["log", "-1", "--format=%s"])
+        .args(["log", "-1", "--format=%B"])
         .output()
         .expect("git log should run");
     assert!(output.status.success(), "git log should succeed");
-    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), message);
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim_end_matches('\n'),
+        message
+    );
+
+    let signature_status = Command::new("git")
+        .current_dir(repository.path())
+        .args(["log", "-1", "--format=%G?"])
+        .output()
+        .expect("git log signature status should run");
+    assert!(signature_status.status.success(), "git log should succeed");
+    assert_eq!(
+        String::from_utf8_lossy(&signature_status.stdout).trim(),
+        "N",
+        "an unsigned choice must override commit.gpgSign"
+    );
 }
 
 #[test]

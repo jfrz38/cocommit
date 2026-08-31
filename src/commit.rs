@@ -1,6 +1,6 @@
 //! Conventional Commit domain model and validation.
 
-/// A normalized Conventional Commit header ready to render or submit.
+/// A normalized Conventional Commit message ready to render or submit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitDraft {
     pub commit_type: String,
@@ -8,6 +8,35 @@ pub struct CommitDraft {
     pub breaking: bool,
     pub message: String,
     pub issue: Option<u64>,
+    pub body: Option<String>,
+    pub footers: Vec<Footer>,
+}
+
+/// An ordered Conventional Commit footer or Git trailer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Footer {
+    pub token: String,
+    pub value: String,
+}
+
+impl Footer {
+    /// Creates a normalized footer from its token and value.
+    pub fn new(token: String, value: String) -> Self {
+        let token = normalize(&token);
+        Self {
+            token: if is_breaking_token(&token) {
+                "BREAKING CHANGE".to_owned()
+            } else {
+                token
+            },
+            value: normalize_multiline(&value),
+        }
+    }
+
+    /// Returns whether this footer describes a breaking change.
+    pub fn is_breaking_change(&self) -> bool {
+        self.token == "BREAKING CHANGE"
+    }
 }
 
 /// A field in a commit draft that can fail validation.
@@ -17,6 +46,7 @@ pub enum DraftField {
     Scope,
     Message,
     Issue,
+    Footer(usize),
 }
 
 /// The reason a draft field is invalid.
@@ -28,6 +58,8 @@ pub enum ValidationErrorKind {
     ContainsForbiddenCharacter,
     InvalidDecimal,
     IntegerOutOfRange,
+    ContainsBlankLine,
+    DuplicateSemanticField,
 }
 
 /// A validation error associated with one editable draft field.
@@ -45,6 +77,8 @@ impl CommitDraft {
         breaking: bool,
         message: String,
         issue: Option<u64>,
+        body: Option<String>,
+        footers: Vec<Footer>,
     ) -> Self {
         Self {
             commit_type: normalize(&commit_type),
@@ -52,6 +86,8 @@ impl CommitDraft {
             breaking,
             message: normalize(&message),
             issue,
+            body: body.and_then(|body| non_empty_multiline_normalized(&body)),
+            footers,
         }
     }
 
@@ -62,9 +98,11 @@ impl CommitDraft {
         breaking: bool,
         message: String,
         issue: Option<String>,
+        body: Option<String>,
+        footers: Vec<Footer>,
     ) -> Result<Self, Vec<ValidationError>> {
         let issue_result = issue.as_deref().map_or(Ok(None), Self::parse_issue);
-        let draft = Self::new(commit_type, scope, breaking, message, None);
+        let draft = Self::new(commit_type, scope, breaking, message, None, body, footers);
         let mut errors = draft.validate().err().unwrap_or_default();
 
         match issue_result {
@@ -102,7 +140,7 @@ impl CommitDraft {
         })
     }
 
-    /// Renders the canonical Conventional Commit header.
+    /// Renders the canonical Conventional Commit message.
     pub fn render_message(&self) -> String {
         let mut message = self.commit_type.clone();
 
@@ -123,6 +161,23 @@ impl CommitDraft {
             message.push_str(" (#");
             message.push_str(&issue.to_string());
             message.push(')');
+        }
+
+        if let Some(body) = &self.body {
+            message.push_str("\n\n");
+            message.push_str(body);
+        }
+
+        if !self.footers.is_empty() {
+            message.push_str("\n\n");
+            for (index, footer) in self.footers.iter().enumerate() {
+                if index > 0 {
+                    message.push('\n');
+                }
+                message.push_str(&footer.token);
+                message.push_str(": ");
+                message.push_str(&footer.value);
+            }
         }
 
         message
@@ -184,6 +239,36 @@ impl CommitDraft {
             ));
         }
 
+        let mut has_breaking_footer = false;
+        for (index, footer) in self.footers.iter().enumerate() {
+            if !is_valid_footer_token(&footer.token) {
+                errors.push(validation_error(
+                    DraftField::Footer(index),
+                    ValidationErrorKind::ContainsForbiddenCharacter,
+                ));
+            }
+            if footer.value.trim().is_empty() {
+                errors.push(validation_error(
+                    DraftField::Footer(index),
+                    ValidationErrorKind::Required,
+                ));
+            } else if contains_blank_line(&footer.value) {
+                errors.push(validation_error(
+                    DraftField::Footer(index),
+                    ValidationErrorKind::ContainsBlankLine,
+                ));
+            }
+            if footer.is_breaking_change() {
+                if has_breaking_footer {
+                    errors.push(validation_error(
+                        DraftField::Footer(index),
+                        ValidationErrorKind::DuplicateSemanticField,
+                    ));
+                }
+                has_breaking_footer = true;
+            }
+        }
+
         if errors.is_empty() {
             Ok(())
         } else {
@@ -207,8 +292,36 @@ fn non_empty_normalized(value: &str) -> Option<String> {
     (!value.is_empty()).then_some(value)
 }
 
+fn normalize_multiline(value: &str) -> String {
+    value.trim().to_owned()
+}
+
+fn non_empty_multiline_normalized(value: &str) -> Option<String> {
+    let value = normalize_multiline(value);
+    (!value.is_empty()).then_some(value)
+}
+
 fn contains_line_break(value: &str) -> bool {
     value.contains(['\n', '\r'])
+}
+
+fn contains_blank_line(value: &str) -> bool {
+    value.lines().any(|line| line.trim().is_empty())
+}
+
+fn is_breaking_token(token: &str) -> bool {
+    matches!(token, "BREAKING CHANGE" | "BREAKING-CHANGE")
+}
+
+fn is_valid_footer_token(token: &str) -> bool {
+    is_breaking_token(token)
+        || (!token.is_empty()
+            && token.split('-').all(|segment| {
+                !segment.is_empty()
+                    && segment
+                        .bytes()
+                        .all(|character| character.is_ascii_alphanumeric())
+            }))
 }
 
 fn validation_error(field: DraftField, kind: ValidationErrorKind) -> ValidationError {

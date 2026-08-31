@@ -215,7 +215,7 @@ pub fn staged_changes(working_directory: &Path) -> Result<StagedChanges> {
     })
 }
 
-/// Runs `git commit` with the supplied message and optional explicit signing.
+/// Runs `git commit` with the supplied message and explicit signing choice.
 pub fn commit(working_directory: &Path, message: &str, sign: bool) -> Result<()> {
     let status = Command::new("git")
         .current_dir(working_directory)
@@ -267,9 +267,11 @@ fn git_failure(command: &str, output: &Output) -> anyhow::Error {
 
 fn commit_arguments(message: &str, sign: bool) -> Vec<String> {
     let mut arguments = vec!["commit".to_owned()];
-    if sign {
-        arguments.push("-S".to_owned());
-    }
+    arguments.push(if sign {
+        "-S".to_owned()
+    } else {
+        "--no-gpg-sign".to_owned()
+    });
     arguments.extend(["-m".to_owned(), message.to_owned()]);
     arguments
 }
