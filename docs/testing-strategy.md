@@ -33,11 +33,10 @@ The expected rendered string must be asserted exactly.
 Separate TOML parsing from filesystem access. Test:
 
 - Defaults with no input and legacy global `sign` compatibility.
-- `ui.sections` defaults, independent partial overrides, and all-four-hidden configuration.
 - Schema-1 global and repository parsing, including all nested tables.
 - Field-by-field precedence, list replacement, and intentionally empty scope suggestions.
 - Rejection of missing, mixed, unsupported, and future schema versions.
-- Unknown key rejection at every table level, including unknown `ui.sections` keys and every `[ui]` table in repository configuration.
+- Unknown key rejection at every table level.
 - Missing file produces defaults; invalid or unreadable files carry their path and source error.
 - Empty type lists and zero subject limits are rejected.
 - Git root resolution from a repository root, subdirectory, and linked worktree.
@@ -75,18 +74,11 @@ Test state transitions directly:
 - Type picker opens and closes correctly.
 - Filtering selects a standard type or custom query.
 - Submit validation focuses the first invalid field.
-- Body paste preserves normalized line breaks, while one-line fields still collapse them.
-- Footer creation, editing, cancellation, deletion, breaking-change shortcut, and reordering preserve the canonical preview.
-- Preview opens an expanded read-only view, preserves it through help, bounds scrolling to wrapped Unicode content, and resets its position when the draft changes.
-- Focus order is the candidate order filtered by each combination of Body, Footers, Issue, and Staged changes visibility; Tab, Shift+Tab, arrows, Preview boundaries, and wrapping remain complete.
-- Hidden sections cannot receive focus, a validation error, an editor, picker, modal, help entry, key hint, or a section-specific keyboard action.
-- Hidden Body, Footers, and Issue contribute absent values; all-visible defaults retain the existing form order and behavior.
-- Hidden Staged changes creates no exclusion state, keeps every staged file included, and never routes an action to unstage.
 - Cancel produces `AppAction::Cancel`.
 - NUL, escape, and other control characters are rejected from edits and paste without changing the field.
 - Field and paste limits reject the whole input without partial insertion, including Unicode input counted as characters rather than bytes.
 
-Use `ratatui::backend::TestBackend` for narrow render smoke tests: normal terminal, compact terminal with vertical scroll, too-small terminal, form mode, picker mode, footer modal, expanded preview, long bodies, many footers, wide Unicode text, and a long staged-change list. Cover every individually hidden section and the all-hidden configuration in full and compact layouts; assert hidden rows, help, hints, and modal entry points are absent. Assert that rendering does not panic; do not snapshot the entire screen.
+Use `ratatui::backend::TestBackend` for narrow render smoke tests: normal terminal, compact terminal with vertical scroll, too-small terminal, form mode, picker mode, and a long staged-change list. Assert that rendering does not panic; do not snapshot the entire screen.
 
 ## Git integration test
 
@@ -99,8 +91,6 @@ An integration test uses `tempfile` and the real Git CLI:
 5. Invoke the production commit-command path without signing.
 6. Run `git log -1 --format=%s`.
 7. Assert `git log --format=%B` equals the expected complete Conventional Commit message, including its body and footers.
-
-Add a multiple-staged-file scenario with `staged_changes = false`; assert the commit contains all staged files and no unstage command is constructed.
 
 No signing or hook behavior is tested automatically because those depend on host configuration. The product design intentionally delegates those workflows to Git.
 
@@ -119,22 +109,7 @@ cargo build --locked --all-targets --all-features
 
 GitHub Actions runs `make check` on Ubuntu for pull requests to `develop` and `main`, every Monday at 06:00 UTC, and on manual dispatch. Windows and macOS run `cargo check --workspace --all-targets --all-features --locked` for pull requests to `main`, scheduled runs, and manual dispatch; this preserves portability coverage without depending on GNU Make.
 
-Before release, run manual smoke tests on a real repository for cancel, valid unsigned commit, explicit signing, Git hook rejection, no staged changes, non-repository invocation, small terminal, bounded pasted text, and forced termination. Run the default configuration, each individually hidden optional section, all sections hidden, and a compact terminal case; verify no hidden control can be reached through navigation or help. The complete-message check must enter a multiline body and an ordered multiline footer through the footer modal, then compare `git log -1 --format='%B'` with Preview. With Staged changes hidden, stage multiple files and verify all are committed. On Unix, verify restoration after a supported external termination signal; on all platforms, verify cancellation with `Ctrl+C` through the event loop.
-
-From Git Bash or zsh at the project root, create an isolated manual-test repository:
-
-```bash
-project_root="$PWD"
-sandbox="$(mktemp -d)"
-git -C "$sandbox" init
-git -C "$sandbox" config user.name "Cocommit Test"
-git -C "$sandbox" config user.email "cocommit@example.com"
-printf 'visual test\n' > "$sandbox/demo.txt"
-git -C "$sandbox" add demo.txt
-(cd "$sandbox" && cargo run --quiet --locked --manifest-path "$project_root/Cargo.toml")
-git -C "$sandbox" log -1 --format='%B'
-git -C "$sandbox" show --stat --oneline HEAD
-```
+Before release, run manual smoke tests on a real repository for cancel, valid unsigned commit, explicit signing, Git hook rejection, no staged changes, non-repository invocation, small terminal, bounded pasted text, and forced termination. On Unix, verify restoration after a supported external termination signal; on all platforms, verify cancellation with `Ctrl+C` through the event loop.
 
 ## Release workflow rehearsal
 

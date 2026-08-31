@@ -1,6 +1,6 @@
 # 🥥 cocommit
 
-**Craft complete Conventional Commit messages without leaving your terminal.**
+**Craft well-formatted Conventional Commit headers without leaving your terminal.**
 
 [![CI](https://github.com/jfrz38/cocommit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jfrz38/cocommit/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/cocommit?logo=rust)](https://crates.io/crates/cocommit)
@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/github/license/jfrz38/cocommit)](LICENSE)
 [![MSRV](https://img.shields.io/badge/rustc-1.94.1%2B-blue)](https://www.rust-lang.org)
 
-`cocommit` is a small keyboard-driven terminal UI for reviewing and refining staged changes before creating complete Conventional Commit messages. It previews the message as you edit it, then delegates Git operations to your installed Git CLI.
+`cocommit` is a small keyboard-driven terminal UI for reviewing and refining staged changes before creating Conventional Commit headers. It previews the message as you edit it, then delegates Git operations to your installed Git CLI.
 
 The name combines **CO**nventional and **COMMIT**s, hence the coconut 🥥.
 
@@ -18,7 +18,7 @@ feat(api)!: add authentication (#123)
 
 ## Why cocommit?
 
-- Build valid Conventional Commit headers, bodies, and footers interactively.
+- Build valid Conventional Commit headers interactively.
 - Preview the final message before committing.
 - Review staged file states and aggregate line statistics, and unstage an accidental file without leaving the composer.
 - Preserve Git hooks, signing, credentials, and native output.
@@ -63,7 +63,7 @@ The type picker also accepts custom types. Scope, breaking marker, issue number,
 <type>(<scope>)<breaking>: <message> (#<issue>)
 ```
 
-Optional parts are omitted when unset. The subject is required and one line; Body accepts paragraphs. The Footers section opens a structured modal editor for ordered trailers and multiline values. The preview updates after every edit.
+Optional parts are omitted when unset. The message is required, and all text fields are one line. The preview updates after every edit.
 
 ### Command-line options
 
@@ -94,7 +94,7 @@ Invalid submission keeps the form open, displays a field-specific error, and foc
 |---|---|
 | Up / Down | Move between form fields and wrap around. In Staged changes, select the previous or next file; at either end, move to the adjacent form field. In the type picker, change the highlighted item. |
 | Tab / Shift+Tab | Move to the next or previous form field. |
-| Enter | Open the type picker, advance from a text field, insert a body/footer-value newline, edit a footer, select the highlighted type, or submit when Commit is focused. |
+| Enter | Open the type picker, advance from a text field, select the highlighted type, or submit when Commit is focused. |
 | Ctrl+Enter | Submit from any form field. |
 | Space | Toggle Breaking or Sign when focused; include or exclude the selected staged file; insert a space in text fields and the type-picker query. The last included file cannot be excluded. |
 | F1 | Open or close keyboard help without losing form state. |
@@ -103,8 +103,6 @@ Invalid submission keeps the form open, displays a field-specific error, and foc
 | Backspace / Delete / Home / End | Edit a text field or type-picker query. |
 
 Typing while Type is focused opens the picker and filters standard types with a case-insensitive prefix search. For example, `d` and `do` select `docs` by default; a query with no matching prefix can be selected as a custom type. cocommit is keyboard-driven and does not support mouse input.
-
-Focus `Footers` with `Tab`. `A` opens a picker with `BREAKING CHANGE`, `Closes`, `Fixes`, `Refs`, and `Co-authored-by`, plus any custom footer name. `Enter` edits the selected footer, `Space` starts a `BREAKING CHANGE` footer, `Delete` removes it, and `Ctrl+Up`/`Ctrl+Down` reorder it. In the footer modal, `Tab` changes Footer name, Value, and Save footer; `Enter` inserts a newline in Value and `Ctrl+Enter` saves. The preview can be focused and scrolled with `Up`/`Down`.
 
 The expanded layout shows a bounded, scrollable staged-change list with file count, `A/M/D/R` states, insertions, deletions, binary-file count, and inclusion checkboxes. Focus `Staged changes` with `Tab`; `Up`/`Down` select a visible file and move to Sign or Commit at the list boundaries, while `Home`/`End` move to its first/last item. Press `Space` to include or exclude the selected file. The working tree and Git index remain unchanged until Commit, when all excluded files are unstaged once before creating the commit. The final included file is protected. The layout switches to a compact, vertically scrolling view in smaller terminals without leaving unused space between Commit and Preview. Below `30x8`, it displays a resize instruction instead of the form.
 
@@ -126,21 +124,6 @@ It is read from `<config-dir>/cocommit/config.toml`:
 
 Missing configuration, or an unavailable platform configuration directory, uses `sign = true`. Set `sign = false` to initialize `Sign commit` as disabled; cocommit then passes `--no-gpg-sign`, overriding Git's `commit.gpgSign` setting for that commit.
 
-Iteration 17 will add schema-versioned global preferences for hiding optional sections while preserving the complete interface by default. Until then, these keys are not accepted:
-
-```toml
-schema_version = 1
-
-[ui]
-sign = true
-
-[ui.sections]
-staged_changes = true
-body = true
-footers = true
-issue = true
-```
-
 For repository conventions, add `.cocommit.toml` at the Git work-tree root. cocommit resolves that root through Git, so the same file applies when it runs from a subdirectory or linked worktree. Configuration precedence is built-in defaults, global configuration, then repository configuration; a future CLI layer will be higher priority. UI preferences remain global, while the repository file accepts only message policy:
 
 ```toml
@@ -160,9 +143,7 @@ prefix = "PROJ-"
 style = "plain"
 ```
 
-In that iteration, every `ui.sections` value will default to `true`; they will be global-only preferences, so repository `.cocommit.toml` files cannot hide an editor. Type, Scope, Breaking, Subject, Sign commit, Preview, and Commit will remain visible. With `staged_changes = false`, preflight will still require staged files, but no exclusion or unstage operation will be offered and Git will commit every file in its index at submission.
-
-`types` will become an allowed-type list, while scope suggestions remain non-blocking. Issue identifiers remain decimal numbers; `prefix` and `style` select a closed rendering convention. The Conventional Commits scope syntax is fixed as `type(scope): subject`; `[]` and `<>` are not supported. Iteration 14 loads, validates, and merges this policy, but does not yet change the current picker, validation, preview, or rendered message. Enforcement is scheduled for Iteration 18.
+`types` will become an allowed-type list, while scope suggestions remain non-blocking. Issue identifiers remain decimal numbers; `prefix` and `style` select a closed rendering convention. The Conventional Commits scope syntax is fixed as `type(scope): subject`; `[]` and `<>` are not supported. Iteration 14 loads, validates, and merges this policy, but does not yet change the current picker, validation, preview, or rendered message. Enforcement is scheduled for Iteration 17.
 
 New configuration files require `schema_version = 1`. The legacy global `sign` form remains supported but cannot be mixed with schema-versioned fields; migrate it manually to `[ui]\nsign = false` before adding policy. Unknown keys, unsupported versions, invalid TOML, and unreadable existing files are reported with their path before the interface opens. cocommit never creates or rewrites configuration files or directories.
 
@@ -182,11 +163,11 @@ After a valid submission, cocommit restores the terminal and runs `git commit` w
 
 ## v1 Limitations
 
-- Amend mode and empty commits are not supported.
+- The domain can render and submit complete messages with bodies and footers, but the current interface exposes header fields only. Multiline and footer editing arrives in Iteration 16; amend mode and empty commits are not supported.
 - cocommit does not stage files, render full diffs or history, manage branches, push, or create pull requests.
 - It does not replace Git identity, hooks, credentials, editors, or signing configuration.
 - AI-generated messages, changelog generation, dry runs, copy-only mode, and CLI field prefills are not supported.
-- Repository message policies are loaded but not enforced until Iteration 18; the active form still uses the standard type picker and existing header renderer.
+- Repository message policies are loaded but not enforced until Iteration 17; the active form still uses the standard type picker and existing header renderer.
 
 ## Development
 

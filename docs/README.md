@@ -18,9 +18,9 @@ Read the documents in this order:
 
 - Initial planning: complete
 - Rust implementation: complete through Phase 9
-- Current work: pre-release roadmap, Iteration 16 awaits its documented manual visual check; Iteration 17 configurable TUI sections follows, then Iteration 18 repository policy enforcement
+- Current work: pre-release roadmap, Iterations 10 through 15 complete; Iteration 16 multiline and footer TUI is next
 - Release status: private pre-release; no public package or release exists
-- Supported scope: complete Conventional Commit composition from already staged changes
+- Supported scope: Conventional Commit header creation from already staged changes; complete-message domain ready for the next TUI iteration
 
 ## Guiding principles
 

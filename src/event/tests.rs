@@ -67,13 +67,6 @@ fn maps_cancellation_navigation_and_editing() {
         ))),
         Some(AppEvent::Edit(Edit::Delete))
     );
-    assert_eq!(
-        map(Event::Key(KeyEvent::new(
-            KeyCode::Up,
-            KeyModifiers::CONTROL
-        ))),
-        Some(AppEvent::MoveFooter(-1))
-    );
 }
 
 #[test]
