@@ -23,12 +23,18 @@ const EXPANDED_HEIGHT_WITH_STATUS: u16 = 42;
 const COMPACT_FORM_ROWS: u16 = 11;
 const FOOTER: &str = "F1 Help  Up/Down Navigate  A Add footer  Ctrl+Enter Commit  Esc Cancel";
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PreviewScrollLimits {
+    pub form: u16,
+    pub expanded: Option<u16>,
+}
+
 /// Draws the complete application state.
-pub fn render(frame: &mut Frame, app: &App) {
+pub fn render(frame: &mut Frame, app: &App) -> PreviewScrollLimits {
     let area = frame.area();
     if area.width < MIN_WIDTH || area.height < MIN_HEIGHT {
         render_resize_instruction(frame, area);
-        return;
+        return PreviewScrollLimits::default();
     }
 
     let expanded_height = if app.status_message().is_some() {
@@ -37,13 +43,13 @@ pub fn render(frame: &mut Frame, app: &App) {
         EXPANDED_HEIGHT
     };
     if area.width >= EXPANDED_WIDTH && area.height >= expanded_height {
-        render_expanded(frame, app, area);
+        render_expanded(frame, app, area)
     } else {
-        render_compact(frame, app, area);
+        render_compact(frame, app, area)
     }
 }
 
-fn render_expanded(frame: &mut Frame, app: &App, area: Rect) {
+fn render_expanded(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLimits {
     let outer = Block::default().borders(Borders::ALL).title(" cocommit ");
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
@@ -127,7 +133,7 @@ fn render_expanded(frame: &mut Frame, app: &App, area: Rect) {
         app.focus == Focus::Sign,
     );
     render_staged_changes(frame, rows[8], app);
-    render_preview(
+    let form_preview_limit = render_preview(
         frame,
         rows[9],
         &app.preview(),
@@ -149,8 +155,17 @@ fn render_expanded(frame: &mut Frame, app: &App, area: Rect) {
     if let Mode::FooterEditor(editor) = &app.mode {
         cursor = render_footer_editor(frame, area, editor);
     }
-    if matches!(app.mode, Mode::PreviewExpanded) {
-        render_preview_expanded(frame, area, &app.preview(), app.preview_scroll);
+    let expanded_preview_limit = if matches!(app.mode, Mode::PreviewExpanded) {
+        Some(render_preview_expanded(
+            frame,
+            area,
+            &app.preview(),
+            app.preview_scroll,
+        ))
+    } else {
+        None
+    };
+    if expanded_preview_limit.is_some() {
         cursor = None;
     }
     if matches!(app.mode, Mode::Help(_)) {
@@ -160,6 +175,10 @@ fn render_expanded(frame: &mut Frame, app: &App, area: Rect) {
 
     if let Some(position) = cursor {
         frame.set_cursor_position(position);
+    }
+    PreviewScrollLimits {
+        form: form_preview_limit,
+        expanded: expanded_preview_limit,
     }
 }
 
@@ -173,7 +192,7 @@ fn render_resize_instruction(frame: &mut Frame, area: Rect) {
     );
 }
 
-fn render_compact(frame: &mut Frame, app: &App, area: Rect) {
+fn render_compact(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLimits {
     let outer = Block::default().borders(Borders::ALL).title(" cocommit ");
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
@@ -209,7 +228,7 @@ fn render_compact(frame: &mut Frame, app: &App, area: Rect) {
         cursor = cursor.or(render_compact_row(frame, row, app, index));
     }
 
-    render_preview(
+    let form_preview_limit = render_preview(
         frame,
         rows[1],
         &app.preview(),
@@ -243,8 +262,17 @@ fn render_compact(frame: &mut Frame, app: &App, area: Rect) {
     if let Mode::FooterEditor(editor) = &app.mode {
         cursor = render_footer_editor(frame, area, editor);
     }
-    if matches!(app.mode, Mode::PreviewExpanded) {
-        render_preview_expanded(frame, area, &app.preview(), app.preview_scroll);
+    let expanded_preview_limit = if matches!(app.mode, Mode::PreviewExpanded) {
+        Some(render_preview_expanded(
+            frame,
+            area,
+            &app.preview(),
+            app.preview_scroll,
+        ))
+    } else {
+        None
+    };
+    if expanded_preview_limit.is_some() {
         cursor = None;
     }
     if matches!(app.mode, Mode::Help(_)) {
@@ -253,6 +281,10 @@ fn render_compact(frame: &mut Frame, app: &App, area: Rect) {
     }
     if let Some(position) = cursor {
         frame.set_cursor_position(position);
+    }
+    PreviewScrollLimits {
+        form: form_preview_limit,
+        expanded: expanded_preview_limit,
     }
 }
 
@@ -462,7 +494,7 @@ fn render_action_row(frame: &mut Frame, area: Rect, label: &str, focused: bool) 
     );
 }
 
-fn render_preview(frame: &mut Frame, area: Rect, preview: &str, focused: bool, scroll: u16) {
+fn render_preview(frame: &mut Frame, area: Rect, preview: &str, focused: bool, scroll: u16) -> u16 {
     let content = Block::default().borders(Borders::ALL).inner(area);
     let viewport = preview_viewport(preview, content, scroll);
     frame.render_widget(
@@ -486,9 +518,10 @@ fn render_preview(frame: &mut Frame, area: Rect, preview: &str, focused: bool, s
             .wrap(Wrap { trim: false }),
         area,
     );
+    viewport.max_scroll
 }
 
-fn render_preview_expanded(frame: &mut Frame, area: Rect, preview: &str, scroll: u16) {
+fn render_preview_expanded(frame: &mut Frame, area: Rect, preview: &str, scroll: u16) -> u16 {
     let popup = centered_rect(area, 90, 85);
     frame.render_widget(Clear, popup);
     let block = Block::default()
@@ -517,10 +550,12 @@ fn render_preview_expanded(frame: &mut Frame, area: Rect, preview: &str, scroll:
         .wrap(Wrap { trim: true }),
         rows[1],
     );
+    viewport.max_scroll
 }
 
 struct PreviewViewport {
     scroll: u16,
+    max_scroll: u16,
     first_line: usize,
     last_line: usize,
     total_lines: usize,
@@ -536,6 +571,7 @@ fn preview_viewport(preview: &str, area: Rect, requested_scroll: u16) -> Preview
     let last_line = (scroll + visible_lines).min(total_lines);
     PreviewViewport {
         scroll: clamp_scroll(scroll),
+        max_scroll: clamp_scroll(max_scroll),
         first_line,
         last_line,
         total_lines,

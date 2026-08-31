@@ -525,6 +525,7 @@ fn preview_omits_an_invalid_issue_until_submission() {
 #[test]
 fn preview_can_expand_scroll_and_restore_the_form() {
     let mut app = App::new(false);
+    app.set_preview_scroll_limits(3, Some(8));
     app.form.message = Input::new("add endpoint".to_owned());
     app.form.body = Input::new("one\ntwo\nthree".to_owned());
     focus(&mut app, Focus::Preview);
@@ -534,7 +535,7 @@ fn preview_can_expand_scroll_and_restore_the_form() {
     app.handle(AppEvent::Down);
     assert_eq!(app.preview_scroll, 1);
     app.handle(AppEvent::Edit(Edit::End));
-    assert_eq!(app.preview_scroll, u16::MAX);
+    assert_eq!(app.preview_scroll, 8);
     app.handle(AppEvent::Edit(Edit::Home));
     assert_eq!(app.preview_scroll, 0);
     app.handle(AppEvent::Help);
@@ -543,6 +544,30 @@ fn preview_can_expand_scroll_and_restore_the_form() {
     app.handle(AppEvent::Escape);
     assert!(matches!(app.mode, Mode::Form));
     assert_eq!(app.focus, Focus::Preview);
+}
+
+#[test]
+fn preview_scrolls_before_arrow_keys_leave_its_boundaries() {
+    let mut app = App::new(false);
+    app.set_preview_scroll_limits(2, None);
+    focus(&mut app, Focus::Preview);
+
+    app.handle(AppEvent::Down);
+    assert_eq!(app.focus, Focus::Preview);
+    assert_eq!(app.preview_scroll, 1);
+    app.handle(AppEvent::Down);
+    assert_eq!(app.preview_scroll, 2);
+    app.handle(AppEvent::Down);
+    assert_eq!(app.focus, Focus::Submit);
+
+    app.handle(AppEvent::Up);
+    assert_eq!(app.focus, Focus::Preview);
+    app.handle(AppEvent::Up);
+    assert_eq!(app.preview_scroll, 1);
+    app.handle(AppEvent::Up);
+    assert_eq!(app.preview_scroll, 0);
+    app.handle(AppEvent::Up);
+    assert_eq!(app.focus, Focus::StagedChanges);
 }
 
 #[test]
