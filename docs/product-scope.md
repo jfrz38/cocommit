@@ -45,8 +45,8 @@ The interface supports an optional multiline body and ordered footers, separated
 - Provide a live preview for every draft change.
 - Show staged file count, additions, modifications, deletions, renames, and aggregate insertion/deletion statistics when Staged changes is enabled.
 - Include or exclude the selected file with `Space`, preserving its working-tree content and keeping at least one file included for commit when Staged changes is enabled.
-- Iteration 17 will provide global visibility preferences for optional Body, Footers, Issue, and Staged changes sections; all four will default to visible while Type, Scope, Breaking, Subject, Sign commit, Preview, and Commit remain visible.
-- In that iteration, hiding Staged changes will still require a non-empty Git index and commit all files that remain staged at submission.
+- Global visibility preferences control optional Body, Footers, Issue, and Staged changes sections; all four default to visible while Type, Scope, Breaking, Subject, Sign commit, Preview, and Commit remain visible.
+- Hiding Staged changes still requires a non-empty Git index and commits all files that remain staged at submission.
 - Support an explicit `-S` Git signing choice.
 - Refuse to open the form outside a usable non-bare Git working tree or when there are no staged changes.
 - Refuse to open the form when standard input or standard output is not an interactive terminal.

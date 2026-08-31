@@ -114,7 +114,7 @@ Rules:
 - Do not create config files or directories automatically.
 - Git identity, keys, hooks, and signing infrastructure remain Git's responsibility.
 
-New configuration files use versioned TOML. The following is the Iteration 17 target for global UI and message defaults; `ui.sections` is not accepted until that iteration is implemented:
+New configuration files use versioned TOML. Global UI and message defaults support the following schema:
 
 ```toml
 schema_version = 1
@@ -142,7 +142,7 @@ prefix = "PROJ-"
 style = "plain" # parenthesized | plain
 ```
 
-In the Iteration 17 target, every `ui.sections` value defaults to `true`. These are personal global preferences: Type, Scope, Breaking, Subject, Sign commit, Preview, and Commit remain visible, while hidden optional sections consume no UI space or input path. A repository policy cannot override them.
+Every `ui.sections` value defaults to `true`. These are personal global preferences: Type, Scope, Breaking, Subject, Sign commit, Preview, and Commit remain visible, while hidden optional sections consume no UI space or input path. A repository policy cannot override them.
 
 The repository policy is always `<work-tree-root>/.cocommit.toml`, where Git resolves the root for subdirectories and linked worktrees. It accepts only `[message]`, never `[ui]`, `[ui.sections]`, or legacy `sign`:
 

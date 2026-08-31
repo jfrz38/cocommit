@@ -25,15 +25,39 @@ pub struct Config {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiPreferences {
     pub sign: bool,
+    pub sections: UiSections,
 }
 
 impl Default for UiPreferences {
     fn default() -> Self {
-        Self { sign: true }
+        Self {
+            sign: true,
+            sections: UiSections::default(),
+        }
     }
 }
 
-/// Repository message conventions. Enforcement begins in Iteration 17.
+/// Optional composer sections controlled exclusively by global preferences.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UiSections {
+    pub staged_changes: bool,
+    pub body: bool,
+    pub footers: bool,
+    pub issue: bool,
+}
+
+impl Default for UiSections {
+    fn default() -> Self {
+        Self {
+            staged_changes: true,
+            body: true,
+            footers: true,
+            issue: true,
+        }
+    }
+}
+
+/// Repository message conventions. Enforcement begins in Iteration 18.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MessagePolicy {
     pub types: Vec<String>,
@@ -128,6 +152,16 @@ struct RepositoryFile {
 #[serde(default, deny_unknown_fields)]
 struct UiPreferencesPatch {
     sign: Option<bool>,
+    sections: Option<UiSectionsPatch>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+struct UiSectionsPatch {
+    staged_changes: Option<bool>,
+    body: Option<bool>,
+    footers: Option<bool>,
+    issue: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -317,6 +351,20 @@ fn merge_repository(config: &mut Config, file: RepositoryFile) {
 fn merge_ui(ui: &mut UiPreferences, patch: UiPreferencesPatch) {
     if let Some(sign) = patch.sign {
         ui.sign = sign;
+    }
+    if let Some(sections) = patch.sections {
+        if let Some(staged_changes) = sections.staged_changes {
+            ui.sections.staged_changes = staged_changes;
+        }
+        if let Some(body) = sections.body {
+            ui.sections.body = body;
+        }
+        if let Some(footers) = sections.footers {
+            ui.sections.footers = footers;
+        }
+        if let Some(issue) = sections.issue {
+            ui.sections.issue = issue;
+        }
     }
 }
 

@@ -108,6 +108,43 @@ fn preflight_accepts_a_staged_repository_and_rejects_missing_staged_changes() {
 }
 
 #[test]
+fn hidden_staged_section_commits_every_staged_file_without_unstaging() {
+    if !require_git() {
+        return;
+    }
+    let repository = tempdir().expect("temporary repository should be created");
+    run_git(repository.path(), ["init"]);
+    configure_identity(repository.path());
+    fs::write(repository.path().join("one.txt"), "one\n").expect("first file should be written");
+    fs::write(repository.path().join("two.txt"), "two\n").expect("second file should be written");
+    run_git(repository.path(), ["add", "."]);
+
+    let mut app = cocommit::app::App::new(false).with_sections(cocommit::config::UiSections {
+        staged_changes: false,
+        ..Default::default()
+    });
+    app.set_staged_changes(
+        cocommit::git::preflight(repository.path()).expect("preflight should pass"),
+    );
+    app.form.message = tui_input::Input::new("commit all staged files".to_owned());
+
+    assert!(app.excluded_staged_files().is_empty());
+    let draft = app.draft().expect("draft should be valid");
+    cocommit::git::commit(repository.path(), &draft.render_message(), false)
+        .expect("production Git commit should succeed");
+
+    let output = Command::new("git")
+        .current_dir(repository.path())
+        .args(["show", "--format=", "--name-only", "HEAD"])
+        .output()
+        .expect("git show should run");
+    assert!(output.status.success(), "git show should succeed");
+    let files = String::from_utf8_lossy(&output.stdout);
+    assert!(files.contains("one.txt"));
+    assert!(files.contains("two.txt"));
+}
+
+#[test]
 fn preflight_reports_the_failing_git_command_outside_a_repository() {
     if !require_git() {
         return;

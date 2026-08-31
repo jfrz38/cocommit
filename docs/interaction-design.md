@@ -39,19 +39,19 @@ The full bordered layout is used when space allows. Smaller terminals use compac
 
 ## Configurable sections
 
-Iteration 17 will add global `ui.sections` preferences that independently control Body, Footers, Issue, and Staged changes. All will be visible by default. Type, Scope, Breaking, Subject, Sign commit, Preview, and Commit will always be visible. Repository configuration cannot change this preference.
+Global `ui.sections` preferences independently control Body, Footers, Issue, and Staged changes. All are visible by default. Type, Scope, Breaking, Subject, Sign commit, Preview, and Commit are always visible. Repository configuration cannot change this preference.
 
-In that iteration, a hidden optional section will have no focus target, help entry, key hint, action, picker, or modal. Hidden Body, Footers, and Issue will be empty and cannot receive validation focus. Hiding Staged changes will retain preflight but remove the staged summary, selection, inclusion checkboxes, and unstage behavior; the resulting commit will use all files in the Git index at submission.
+A hidden optional section has no focus target, help entry, key hint, action, picker, or modal. Hidden Body, Footers, and Issue are empty and cannot receive validation focus. Hiding Staged changes retains preflight but removes the staged summary, selection, inclusion checkboxes, and unstage behavior; the resulting commit uses all files in the Git index at submission.
 
 ## Focus model
 
-Iteration 17 focus candidates will be ordered as follows and filtered to the visible sections:
+Focus candidates are ordered as follows and filtered to visible sections:
 
 ```text
 Type -> Scope -> Breaking -> Message -> Body -> Footers -> Issue -> Sign -> Staged changes -> Preview -> Submit
 ```
 
-In that iteration, `Up` and `Down` will move backward and forward through visible fields, respectively, and wrap. When Footers or Staged changes is visible and focused, they will select a visibly highlighted item and leave the section at its boundaries. Preview will scroll with these keys while content remains above or below it; at a boundary it will move to the preceding or following visible field. `Home`/`End` will jump within its real scroll bounds. `Enter` will open an expanded preview from Preview. `Tab` and `Shift+Tab` will always move focus. Typing or pasting while Type is focused will open its popup search. Text input will otherwise be active for visible Scope, Message, Body, and Issue.
+`Up` and `Down` move backward and forward through visible fields, respectively, and wrap. When Footers or Staged changes is visible and focused, they select a visibly highlighted item and leave the section at its boundaries. Preview scrolls with these keys while content remains above or below it; at a boundary it moves to the preceding or following visible field. `Home`/`End` jump within its real scroll bounds. `Enter` opens an expanded preview from Preview. `Tab` and `Shift+Tab` always move focus. Typing or pasting while Type is focused opens its popup search. Text input is otherwise active for visible Scope, Message, Body, and Issue.
 
 ## Expanded preview
 
@@ -59,7 +59,7 @@ The expanded preview is a read-only overlay over the current form. It displays t
 
 ## Body and footers
 
-When Body is visible, it accepts multiline text and preserves paragraph breaks. Its cursor and viewport follow the active line. When Footers is visible, footers are shown in order and keep the selected entry visible. `A` opens a footer-name picker containing `BREAKING CHANGE`, `Closes`, `Fixes`, `Refs`, `Co-authored-by`, and a custom-name choice for any other trailer. `Enter` edits the selected footer, with Footer name, multiline Value, and Save footer controls; `Space` creates or edits the one `BREAKING CHANGE` footer; `Delete` removes the selected footer; `Ctrl+Up` and `Ctrl+Down` reorder it. The modal keeps edits isolated until Save, and help preserves its state. In Iteration 17, those editors and shortcuts will not exist when their section is hidden.
+When Body is visible, it accepts multiline text and preserves paragraph breaks. Its cursor and viewport follow the active line. When Footers is visible, footers are shown in order and keep the selected entry visible. `A` opens a footer-name picker containing `BREAKING CHANGE`, `Closes`, `Fixes`, `Refs`, `Co-authored-by`, and a custom-name choice for any other trailer. `Enter` edits the selected footer, with Footer name, multiline Value, and Save footer controls; `Space` creates or edits the one `BREAKING CHANGE` footer; `Delete` removes the selected footer; `Ctrl+Up` and `Ctrl+Down` reorder it. The modal keeps edits isolated until Save, and help preserves its state. These editors and shortcuts do not exist when their section is hidden.
 
 ## Keyboard behavior
 
@@ -107,7 +107,7 @@ On validation failure:
 
 1. Keep the UI open.
 2. Display a concise field-specific error in Error.
-3. In Iteration 17, move focus to the first invalid visible field.
+3. Move focus to the first invalid visible field.
 
 On cancel, restore the terminal and return success without invoking Git. On valid submission, the UI returns the draft and signing choice to `main`; Git runs only after the terminal is restored.
 
@@ -122,4 +122,4 @@ On cancel, restore the terminal and return success without invoking Git. On vali
 
 ## Staged-change context
 
-Before the form opens, cocommit captures the Git index. The expanded layout shows the staged-file total, `A/M/D/R` counts, insertion/deletion totals, binary-file count when applicable, and a bounded scrollable list with a visible selected file and inclusion checkbox. File names are rendered safely even when they contain unusual characters. `Space` changes that checkbox without invoking Git. On submission, cocommit removes every excluded file from the index without changing its working-tree content, then commits the remaining files. A rename passes both paths. If it is the final included file, the operation is blocked with `Cannot unstage the last staged file`. The compact layout shows the aggregate summary with the selected-file position and places Preview directly below the form rows it renders. In Iteration 17, when this section is hidden, no staged summary, selection, checkbox, or unstage action will exist; every staged file will be committed.
+Before the form opens, cocommit captures the Git index. The expanded layout shows the staged-file total, `A/M/D/R` counts, insertion/deletion totals, binary-file count when applicable, and a bounded scrollable list with a visible selected file and inclusion checkbox. File names are rendered safely even when they contain unusual characters. `Space` changes that checkbox without invoking Git. On submission, cocommit removes every excluded file from the index without changing its working-tree content, then commits the remaining files. A rename passes both paths. If it is the final included file, the operation is blocked with `Cannot unstage the last staged file`. The compact layout shows the aggregate summary with the selected-file position and places Preview directly below the form rows it renders. When this section is hidden, no staged summary, selection, checkbox, or unstage action exists; every staged file is committed.

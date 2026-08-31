@@ -126,7 +126,7 @@ It is read from `<config-dir>/cocommit/config.toml`:
 
 Missing configuration, or an unavailable platform configuration directory, uses `sign = true`. Set `sign = false` to initialize `Sign commit` as disabled; cocommit then passes `--no-gpg-sign`, overriding Git's `commit.gpgSign` setting for that commit.
 
-Iteration 17 will add schema-versioned global preferences for hiding optional sections while preserving the complete interface by default. Until then, these keys are not accepted:
+Schema-versioned global preferences can hide optional sections while preserving the complete interface by default:
 
 ```toml
 schema_version = 1
@@ -160,7 +160,7 @@ prefix = "PROJ-"
 style = "plain"
 ```
 
-In that iteration, every `ui.sections` value will default to `true`; they will be global-only preferences, so repository `.cocommit.toml` files cannot hide an editor. Type, Scope, Breaking, Subject, Sign commit, Preview, and Commit will remain visible. With `staged_changes = false`, preflight will still require staged files, but no exclusion or unstage operation will be offered and Git will commit every file in its index at submission.
+Every `ui.sections` value defaults to `true`; they are global-only preferences, so repository `.cocommit.toml` files cannot hide an editor. Type, Scope, Breaking, Subject, Sign commit, Preview, and Commit remain visible. With `staged_changes = false`, preflight still requires staged files, but no exclusion or unstage operation is offered and Git commits every file in its index at submission.
 
 `types` will become an allowed-type list, while scope suggestions remain non-blocking. Issue identifiers remain decimal numbers; `prefix` and `style` select a closed rendering convention. The Conventional Commits scope syntax is fixed as `type(scope): subject`; `[]` and `<>` are not supported. Iteration 14 loads, validates, and merges this policy, but does not yet change the current picker, validation, preview, or rendered message. Enforcement is scheduled for Iteration 18.
 
