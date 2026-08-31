@@ -108,7 +108,7 @@ The expanded layout shows a bounded, scrollable staged-change list with file cou
 
 ## Configuration
 
-The optional global configuration file contains UI preferences only:
+The optional global configuration file retains the legacy UI-preference form:
 
 ```toml
 sign = true
@@ -122,7 +122,30 @@ It is read from `<config-dir>/cocommit/config.toml`:
 | macOS | `~/Library/Application Support/cocommit/config.toml` |
 | Windows | `%APPDATA%\cocommit\config.toml` |
 
-Missing configuration, or an unavailable platform configuration directory, uses `sign = true`. Set `sign = false` to omit the explicit `-S` flag. This does not force an unsigned commit: Git's own `commit.gpgSign` setting can still apply. Unknown keys, invalid TOML, and unreadable existing files are reported as errors before the interface opens. cocommit never creates configuration files or directories.
+Missing configuration, or an unavailable platform configuration directory, uses `sign = true`. Set `sign = false` to omit the explicit `-S` flag. This does not force an unsigned commit: Git's own `commit.gpgSign` setting can still apply.
+
+For repository conventions, add `.cocommit.toml` at the Git work-tree root. cocommit resolves that root through Git, so the same file applies when it runs from a subdirectory or linked worktree. Configuration precedence is built-in defaults, global configuration, then repository configuration; a future CLI layer will be higher priority. UI preferences remain global, while the repository file accepts only message policy:
+
+```toml
+schema_version = 1
+
+[message]
+types = ["feat", "fix", "docs"]
+scope_suggestions = ["api", "tui"]
+
+[message.subject]
+max_length = 72
+capitalization = "lowercase"
+terminal_punctuation = "forbid"
+
+[message.issue]
+prefix = "PROJ-"
+style = "plain"
+```
+
+`types` will become an allowed-type list, while scope suggestions remain non-blocking. Issue identifiers remain decimal numbers; `prefix` and `style` select a closed rendering convention. The Conventional Commits scope syntax is fixed as `type(scope): subject`; `[]` and `<>` are not supported. Iteration 14 loads, validates, and merges this policy, but does not yet change the current picker, validation, preview, or rendered message. Enforcement is scheduled for Iteration 17.
+
+New configuration files require `schema_version = 1`. The legacy global `sign` form remains supported but cannot be mixed with schema-versioned fields; migrate it manually to `[ui]\nsign = false` before adding policy. Unknown keys, unsupported versions, invalid TOML, and unreadable existing files are reported with their path before the interface opens. cocommit never creates or rewrites configuration files or directories.
 
 ## Git Behavior
 
@@ -144,7 +167,7 @@ After a valid submission, cocommit restores the terminal and runs `git commit` w
 - cocommit does not stage files, render full diffs or history, manage branches, push, or create pull requests.
 - It does not replace Git identity, hooks, credentials, editors, or signing configuration.
 - AI-generated messages, changelog generation, dry runs, copy-only mode, and CLI field prefills are not supported.
-- Configuration is global only; repository-local settings and configurable types, scopes, or issue formatting are not supported.
+- Repository message policies are loaded but not enforced until Iteration 17; the active form still uses the standard type picker and existing header renderer.
 
 ## Development
 
