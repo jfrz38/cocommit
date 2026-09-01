@@ -37,7 +37,7 @@ tests/
 
 `rust-toolchain.toml` fixes development and CI to Rust 1.94.1 with the `clippy` and `rustfmt` components. `Makefile` is the local quality interface: `make check` runs formatting, linting, tests, and a build against `Cargo.lock`.
 
-`.github/workflows/ci.yml` runs that quality suite on Ubuntu. It also checks compilation on Windows and macOS for pull requests to `main`, scheduled runs, and manual dispatches, without requiring GNU Make on those runners.
+The `Makefile` defines reusable quality commands. `.github/workflows/ci.yml` uses `make check`, `make check-portability`, and `make check-workflows` on Ubuntu. Windows and macOS mirror `make check-portability` with direct Cargo commands because GNU Make is not guaranteed on Windows runners. CI bootstraps actionlint and ShellCheck, while their invocation remains in the Makefile. Each runner verifies Git before tests execute.
 
 ## Module responsibilities
 

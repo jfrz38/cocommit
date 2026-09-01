@@ -284,6 +284,8 @@ Completion criteria:
 
 ### Iteration 19: Cross-platform quality
 
+Status: in progress.
+
 Compilation alone is insufficient for a cross-platform TUI. Every advertised platform must execute meaningful tests and produce the binary that will be distributed.
 
 Work:
