@@ -18,6 +18,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  workflow-lint:
+    name: Validate workflows and shell fragments
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install --yes shellcheck
+      - name: Install actionlint
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Validate GitHub Actions workflows
+        run: make check-workflows
+
   quality:
     name: Format, lint, test, and build
     runs-on: ubuntu-latest
@@ -33,13 +47,11 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-rust-1.94.1-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - run: make check
+      - name: Verify Git is available
+        run: git --version
+      - run: make check check-portability
 
   portability:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'schedule' ||
-      (github.event_name == 'pull_request' && github.base_ref == 'main')
     name: Portability (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -49,6 +61,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.94.1
+        with:
+          components: clippy, rustfmt
       - uses: actions/cache@v4
         with:
           path: |
@@ -56,5 +70,12 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-rust-1.94.1-cargo-${{ hashFiles('**/Cargo.lock') }}
-      # GNU Make is not guaranteed on Windows runners.
-      - run: cargo check --workspace --all-targets --all-features --locked
+      - name: Verify Git is available
+        run: git --version
+      # Mirrors `make check-portability`; GNU Make is not guaranteed on Windows runners.
+      - name: Run cross-platform quality suite
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+          cargo test --locked --all-targets --all-features
+          cargo build --release --locked --all-targets --all-features

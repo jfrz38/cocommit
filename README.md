@@ -41,6 +41,7 @@ The installed `cocommit` executable must be on your `PATH`.
 - Run the application from a non-bare Git working tree that has staged changes.
 - A terminal that supports interactive input is required.
 - Rust 1.94.1 is required when installing from source. The repository pins this version with `rust-toolchain.toml`.
+- The release-candidate terminal matrix and known keyboard limitations are documented in [Terminal support](docs/terminal-support.md).
 
 ## Usage
 
@@ -206,6 +207,15 @@ Run the complete local quality suite with:
 
 ```bash
 make check
+```
+
+Run the cross-platform equivalent and validate CI definitions after installing actionlint and ShellCheck:
+
+```bash
+make check-portability
+make check-workflows
+# Equivalent to the local CI checks, after installing actionlint and ShellCheck.
+make ci
 ```
 
 Validate the package that will be published without uploading it:
