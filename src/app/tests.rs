@@ -1,11 +1,47 @@
 use super::*;
 use crate::commit::{DraftField, ValidationErrorKind};
-use crate::config::UiSections;
+use crate::config::{Capitalization, IssueStyle, MessagePolicy, TerminalPunctuation, UiSections};
 
 fn focus(app: &mut App, target: Focus) {
     while app.focus != target {
         assert_eq!(app.handle(AppEvent::Tab), AppAction::Continue);
     }
+}
+
+#[test]
+fn repository_policy_restricts_types_suggests_scopes_and_formats_preview() {
+    let mut policy = MessagePolicy {
+        types: vec!["fix".to_owned()],
+        types_are_restricted: true,
+        scope_suggestions: vec!["api".to_owned()],
+        ..MessagePolicy::default()
+    };
+    policy.subject.capitalization = Capitalization::Uppercase;
+    policy.subject.terminal_punctuation = TerminalPunctuation::Require;
+    policy.issue.prefix = "PROJ-".to_owned();
+    policy.issue.style = IssueStyle::Plain;
+    let mut app = App::new(false).with_message_policy(&policy);
+
+    assert_eq!(app.form.commit_type.to_string(), "fix");
+    app.open_picker();
+    let Mode::TypePicker(picker) = &app.mode else {
+        panic!("type picker should open");
+    };
+    assert_eq!(
+        app.type_choices(picker),
+        vec![TypeChoice::Standard("fix".to_owned())]
+    );
+
+    app.mode = Mode::Form;
+    app.focus = Focus::Scope;
+    app.handle(AppEvent::Enter);
+    assert!(matches!(app.mode, Mode::ScopePicker(_)));
+    app.handle(AppEvent::Enter);
+    assert_eq!(app.form.scope.to_string(), "api");
+
+    app.form.message = Input::new("Add endpoint.".to_owned());
+    app.form.issue = Input::new("42".to_owned());
+    assert_eq!(app.preview(), "fix(api): Add endpoint. PROJ-42");
 }
 
 #[test]

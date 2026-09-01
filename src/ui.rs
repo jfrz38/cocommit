@@ -117,7 +117,7 @@ fn render_expanded(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLim
     cursor = cursor.or(render_text_row(
         frame,
         rows[1],
-        "Scope",
+        app.scope_label(),
         &app.form.scope,
         app.focus == Focus::Scope,
     ));
@@ -189,7 +189,10 @@ fn render_expanded(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLim
     render_footer(frame, rows[row]);
 
     if let Mode::TypePicker(picker) = &app.mode {
-        cursor = render_picker(frame, area, picker);
+        cursor = render_picker(frame, area, app, picker);
+    }
+    if let Mode::ScopePicker(picker) = &app.mode {
+        cursor = render_scope_picker(frame, area, app, picker);
     }
     if let Mode::FooterNamePicker(picker) = &app.mode {
         cursor = render_footer_name_picker(frame, area, picker);
@@ -307,7 +310,10 @@ fn render_compact(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLimi
     );
 
     if let Mode::TypePicker(picker) = &app.mode {
-        cursor = render_picker(frame, area, picker);
+        cursor = render_picker(frame, area, app, picker);
+    }
+    if let Mode::ScopePicker(picker) = &app.mode {
+        cursor = render_scope_picker(frame, area, app, picker);
     }
     if let Mode::FooterNamePicker(picker) = &app.mode {
         cursor = render_footer_name_picker(frame, area, picker);
@@ -350,7 +356,7 @@ fn render_compact_row(frame: &mut Frame, area: Rect, app: &App, focus: Focus) ->
             app.focus == Focus::CommitType,
         ),
         Focus::Scope => (
-            "Scope",
+            app.scope_label(),
             Some(&app.form.scope),
             None,
             app.focus == Focus::Scope,
@@ -833,14 +839,35 @@ fn help_text(app: &App) -> String {
     lines.join("\n")
 }
 
-fn render_picker(frame: &mut Frame, area: Rect, picker: &TypePickerState) -> Option<Position> {
+fn render_picker(
+    frame: &mut Frame,
+    area: Rect,
+    app: &App,
+    picker: &TypePickerState,
+) -> Option<Position> {
     render_choice_picker(
         frame,
         area,
-        " Select commit type ",
+        app.type_picker_title(),
         &picker.query,
         picker.highlighted,
-        picker.choices(),
+        app.type_choices(picker),
+    )
+}
+
+fn render_scope_picker(
+    frame: &mut Frame,
+    area: Rect,
+    app: &App,
+    picker: &TypePickerState,
+) -> Option<Position> {
+    render_choice_picker(
+        frame,
+        area,
+        " Select scope suggestion ",
+        &picker.query,
+        picker.highlighted,
+        app.scope_choices(picker),
     )
 }
 

@@ -159,7 +159,7 @@ max_length = 72
 
 `types` is the future allowed-type list and cannot be empty. Scope suggestions are never a restriction. Issue identifiers will remain decimal numbers; `prefix` and `style` support common renderings without templates or regular expressions. The only supported scope syntax is `type(scope): subject`; `[]` and `<>` are deliberately not configurable.
 
-Iteration 14 loads and validates these policies but does not apply them to the current picker, validation, preview, or rendered Git message. That enforcement is deferred to Iteration 18, preserving the current formatter as the only active path. The legacy global file must be migrated manually from `sign = false` to `[ui]\nsign = false` before adding schema-versioned fields. No file is rewritten automatically.
+Configured types, subject rules, issue formatting, and scope suggestions apply to the composer, preview, and submitted message. Configured types are an allow-list only when `[message].types` is explicitly present; scope suggestions remain optional. The legacy global file must be migrated manually from `sign = false` to `[ui]\nsign = false` before adding schema-versioned fields. No file is rewritten automatically.
 
 ## Validation contract
 

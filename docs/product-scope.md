@@ -60,7 +60,7 @@ The interface supports an optional multiline body and ordered footers, separated
 - AI-generated messages.
 - Replacing Git hooks, credentials, signing, or editor workflows.
 - Letting repository configuration control personal UI visibility. Repository policy and global UI preferences remain separate.
-- Enforcing repository message policy in type selection, validation, or rendering. The resolved subject policy is displayed as non-blocking guidance; enforcement is deferred to Iteration 18.
+- Executing commitlint configuration, plugins, or arbitrary repository code. Supported static repository message policy is enforced as documented in ADR 0012.
 - Dry-run, copy-only mode, or CLI prefill arguments.
 
 These ideas may be reconsidered only after the focused commit-header workflow is stable.

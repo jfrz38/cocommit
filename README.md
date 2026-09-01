@@ -162,7 +162,7 @@ style = "plain"
 
 Every `ui.sections` value defaults to `true`; they are global-only preferences, so repository `.cocommit.toml` files cannot hide an editor. Type, Scope, Breaking, Subject, Sign commit, Preview, and Commit remain visible. With `staged_changes = false`, preflight still requires staged files, but no exclusion or unstage operation is offered and Git commits every file in its index at submission.
 
-`types` will become an allowed-type list, while scope suggestions remain non-blocking. Issue identifiers remain decimal numbers; `prefix` and `style` select a closed rendering convention. The Conventional Commits scope syntax is fixed as `type(scope): subject`; `[]` and `<>` are not supported. Iteration 14 loads, validates, and merges this policy, but does not yet change the current picker, validation, preview, or rendered message. Enforcement is scheduled for Iteration 18.
+An explicitly configured `types` list is an allowed-type list; without it, standard types remain suggestions and custom types are accepted. Scope suggestions remain non-blocking. Issue identifiers remain decimal numbers; `prefix` and `style` select a closed rendering convention. The Conventional Commits scope syntax is fixed as `type(scope): subject`; `[]` and `<>` are not supported. Policy applies to picker choices, validation, preview, and the rendered Git message.
 
 New configuration files require `schema_version = 1`. The legacy global `sign` form remains supported but cannot be mixed with schema-versioned fields; migrate it manually to `[ui]\nsign = false` before adding policy. Unknown keys, unsupported versions, invalid TOML, and unreadable existing files are reported with their path before the interface opens. cocommit never creates or rewrites configuration files or directories.
 
@@ -186,7 +186,7 @@ After a valid submission, cocommit restores the terminal and runs `git commit` w
 - cocommit does not stage files, render full diffs or history, manage branches, push, or create pull requests.
 - It does not replace Git identity, hooks, credentials, editors, or signing configuration.
 - AI-generated messages, changelog generation, dry runs, copy-only mode, and CLI field prefills are not supported.
-- Repository message policies are loaded but not enforced until Iteration 18; the active form still uses the standard type picker and existing header renderer.
+- Repository message policies guide the form and are enforced before Git runs; Git hooks remain final authority.
 
 ## Development
 

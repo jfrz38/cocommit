@@ -4,10 +4,7 @@ use tui_input::{Input, InputRequest};
 
 use crate::{
     commit::{CommitDraft, DraftField, Footer, ValidationError, ValidationErrorKind},
-    config::{
-        Capitalization, DEFAULT_TYPES, MessagePolicy, SubjectPolicy, TerminalPunctuation,
-        UiSections,
-    },
+    config::{Capitalization, MessagePolicy, TerminalPunctuation, UiSections},
     git::{StagedChanges, StagedFile},
 };
 
@@ -90,7 +87,11 @@ pub struct FormState {
 }
 
 impl FormState {
-    fn draft(&self, sections: UiSections) -> Result<CommitDraft, Vec<ValidationError>> {
+    fn draft(
+        &self,
+        sections: UiSections,
+        policy: &MessagePolicy,
+    ) -> Result<CommitDraft, Vec<ValidationError>> {
         CommitDraft::from_raw(
             self.commit_type.to_string(),
             Some(self.scope.to_string()),
@@ -104,6 +105,10 @@ impl FormState {
                 Vec::new()
             },
         )
+        .and_then(|draft| {
+            draft.validate_with_policy(policy)?;
+            Ok(draft)
+        })
     }
 }
 
@@ -115,18 +120,43 @@ pub struct TypePickerState {
 
 impl TypePickerState {
     pub fn choices(&self) -> Vec<TypeChoice> {
+        self.choices_for(&MessagePolicy::default())
+    }
+
+    pub fn choices_for(&self, policy: &MessagePolicy) -> Vec<TypeChoice> {
         let query = self.query.to_string();
         let query_lower = query.to_lowercase();
-        let mut choices = DEFAULT_TYPES
+        let mut choices = policy
+            .types
             .iter()
-            .filter(|commit_type| commit_type.starts_with(&query_lower))
-            .map(|commit_type| TypeChoice::Standard((*commit_type).to_owned()))
+            .filter(|commit_type| commit_type.to_lowercase().starts_with(&query_lower))
+            .cloned()
+            .map(TypeChoice::Standard)
             .collect::<Vec<_>>();
 
-        if !query.is_empty() && !DEFAULT_TYPES.contains(&query.as_str()) {
+        if !policy.types_are_restricted
+            && !query.is_empty()
+            && !policy.types.iter().any(|commit_type| commit_type == &query)
+        {
             choices.push(TypeChoice::CustomQuery(query));
         }
 
+        choices
+    }
+
+    pub fn scope_choices_for(&self, policy: &MessagePolicy) -> Vec<TypeChoice> {
+        let query = self.query.to_string();
+        let query_lower = query.to_lowercase();
+        let mut choices = policy
+            .scope_suggestions
+            .iter()
+            .filter(|scope| scope.to_lowercase().starts_with(&query_lower))
+            .cloned()
+            .map(TypeChoice::Standard)
+            .collect::<Vec<_>>();
+        if !query.is_empty() && !policy.scope_suggestions.iter().any(|scope| scope == &query) {
+            choices.push(TypeChoice::CustomQuery(query));
+        }
         choices
     }
 }
@@ -167,6 +197,7 @@ impl FooterNamePickerState {
 pub enum Mode {
     Form,
     TypePicker(TypePickerState),
+    ScopePicker(TypePickerState),
     FooterNamePicker(FooterNamePickerState),
     FooterEditor(FooterEditorState),
     PreviewExpanded,
@@ -201,7 +232,7 @@ pub struct App {
     pub preview_scroll: u16,
     preview_scroll_limit: u16,
     expanded_preview_scroll_limit: u16,
-    subject_policy: SubjectPolicy,
+    message_policy: MessagePolicy,
     staged_included: Vec<bool>,
     pub validation_error: Option<ValidationError>,
     pub input_error: Option<&'static str>,
@@ -235,7 +266,7 @@ impl App {
             preview_scroll: 0,
             preview_scroll_limit: 0,
             expanded_preview_scroll_limit: 0,
-            subject_policy: SubjectPolicy::default(),
+            message_policy: MessagePolicy::default(),
             staged_included: Vec::new(),
             validation_error: None,
             input_error: None,
@@ -243,9 +274,12 @@ impl App {
         }
     }
 
-    /// Shows the resolved repository convention without enforcing it before Iteration 18.
     pub fn with_message_policy(mut self, policy: &MessagePolicy) -> Self {
-        self.subject_policy = policy.subject.clone();
+        self.message_policy = policy.clone();
+        if policy.types_are_restricted && !policy.types.contains(&self.form.commit_type.to_string())
+        {
+            self.form.commit_type = Input::new(policy.types.first().cloned().unwrap_or_default());
+        }
         self
     }
 
@@ -287,15 +321,16 @@ impl App {
     pub fn subject_indicator(&self) -> String {
         let length = self.form.message.to_string().chars().count();
         let limit = self
-            .subject_policy
+            .message_policy
+            .subject
             .max_length
             .map_or_else(|| length.to_string(), |max| format!("{length}/{max}"));
-        let capitalization = match self.subject_policy.capitalization {
+        let capitalization = match self.message_policy.subject.capitalization {
             Capitalization::Allow => None,
             Capitalization::Lowercase => Some("lowercase"),
             Capitalization::Uppercase => Some("uppercase"),
         };
-        let punctuation = match self.subject_policy.terminal_punctuation {
+        let punctuation = match self.message_policy.subject.terminal_punctuation {
             TerminalPunctuation::Allow => None,
             TerminalPunctuation::Forbid => Some("no terminal punctuation"),
             TerminalPunctuation::Require => Some("terminal punctuation required"),
@@ -311,8 +346,32 @@ impl App {
         .join("; ")
     }
 
+    pub fn scope_label(&self) -> &'static str {
+        if self.message_policy.scope_suggestions.is_empty() {
+            "Scope"
+        } else {
+            "Scope (Enter suggestions)"
+        }
+    }
+
+    pub fn type_picker_title(&self) -> &'static str {
+        if self.message_policy.types_are_restricted {
+            " Allowed commit types "
+        } else {
+            " Select commit type "
+        }
+    }
+
+    pub fn type_choices(&self, picker: &TypePickerState) -> Vec<TypeChoice> {
+        picker.choices_for(&self.message_policy)
+    }
+
+    pub fn scope_choices(&self, picker: &TypePickerState) -> Vec<TypeChoice> {
+        picker.scope_choices_for(&self.message_policy)
+    }
+
     pub fn draft(&self) -> Result<CommitDraft, Vec<ValidationError>> {
-        self.form.draft(self.sections)
+        self.form.draft(self.sections, &self.message_policy)
     }
 
     pub fn set_staged_changes(&mut self, staged_changes: StagedChanges) {
@@ -391,7 +450,7 @@ impl App {
                 Vec::new()
             },
         )
-        .render_message()
+        .render_message_with_policy(&self.message_policy)
     }
 
     /// Returns a concise message suitable for the form status area.
@@ -409,6 +468,9 @@ impl App {
                 (DraftField::CommitType, ValidationErrorKind::ContainsForbiddenCharacter) => {
                     "Type contains an invalid character"
                 }
+                (DraftField::CommitType, ValidationErrorKind::NotAllowed) => {
+                    "Type is not allowed by repository policy"
+                }
                 (DraftField::Scope, ValidationErrorKind::MustBeSingleLine) => {
                     "Scope must be one line"
                 }
@@ -418,6 +480,18 @@ impl App {
                 (DraftField::Message, ValidationErrorKind::Required) => "Message is required",
                 (DraftField::Message, ValidationErrorKind::MustBeSingleLine) => {
                     "Message must be one line"
+                }
+                (DraftField::Message, ValidationErrorKind::TooLong) => {
+                    "Message exceeds repository limit"
+                }
+                (DraftField::Message, ValidationErrorKind::InvalidCapitalization) => {
+                    "Message capitalization does not match policy"
+                }
+                (DraftField::Message, ValidationErrorKind::TerminalPunctuationForbidden) => {
+                    "Message cannot end with . ! or ?"
+                }
+                (DraftField::Message, ValidationErrorKind::TerminalPunctuationRequired) => {
+                    "Message must end with . ! or ?"
                 }
                 (DraftField::Issue, ValidationErrorKind::InvalidDecimal) => {
                     "Issue must be a decimal number"
@@ -463,6 +537,7 @@ impl App {
         match &mut self.mode {
             Mode::Form => self.handle_form(event),
             Mode::TypePicker(_) => self.handle_type_picker(event),
+            Mode::ScopePicker(_) => self.handle_scope_picker(event),
             Mode::FooterNamePicker(_) => self.handle_footer_name_picker(event),
             Mode::FooterEditor(_) => self.handle_footer_editor(event),
             Mode::PreviewExpanded => self.handle_preview_expanded(event),
@@ -518,6 +593,9 @@ impl App {
             }
             AppEvent::Enter => match self.focus {
                 Focus::CommitType => self.open_picker(),
+                Focus::Scope if !self.message_policy.scope_suggestions.is_empty() => {
+                    self.open_scope_picker()
+                }
                 Focus::Scope | Focus::Message | Focus::Issue => self.focus = self.next_focus(),
                 Focus::Body => self.edit_form(Edit::Insert('\n')),
                 Focus::Footers => {
@@ -637,6 +715,36 @@ impl App {
             query: Input::default(),
             highlighted: 0,
         });
+    }
+
+    fn open_scope_picker(&mut self) {
+        self.mode = Mode::ScopePicker(TypePickerState {
+            query: Input::default(),
+            highlighted: 0,
+        });
+    }
+
+    fn handle_scope_picker(&mut self, event: AppEvent) -> AppAction {
+        match event {
+            AppEvent::Escape => {
+                self.mode = Mode::Form;
+                self.input_error = None;
+            }
+            AppEvent::Cancel => return AppAction::Cancel,
+            AppEvent::Enter => self.select_scope_choice(),
+            AppEvent::Up => self.move_scope_highlight(-1),
+            AppEvent::Down => self.move_scope_highlight(1),
+            AppEvent::Edit(edit) => self.edit_scope_picker(edit),
+            AppEvent::Paste(value) => self.paste_scope_picker(&value),
+            AppEvent::Space => self.edit_scope_picker(Edit::Insert(' ')),
+            AppEvent::Tab
+            | AppEvent::BackTab
+            | AppEvent::Submit
+            | AppEvent::Resize(_, _)
+            | AppEvent::Help
+            | AppEvent::MoveFooter(_) => {}
+        }
+        AppAction::Continue
     }
 
     fn open_footer_name_picker(&mut self) {
@@ -872,7 +980,10 @@ impl App {
         let Mode::TypePicker(picker) = &self.mode else {
             return;
         };
-        let choice = picker.choices().get(picker.highlighted).cloned();
+        let choice = picker
+            .choices_for(&self.message_policy)
+            .get(picker.highlighted)
+            .cloned();
         match choice {
             Some(TypeChoice::Standard(value)) | Some(TypeChoice::CustomQuery(value)) => {
                 self.form.commit_type = Input::new(value);
@@ -886,15 +997,48 @@ impl App {
     }
 
     fn move_highlight(&mut self, direction: isize) {
+        let choices_len = match &self.mode {
+            Mode::TypePicker(picker) => picker.choices_for(&self.message_policy).len(),
+            _ => return,
+        };
         let Mode::TypePicker(picker) = &mut self.mode else {
             return;
         };
-        let len = picker.choices().len();
-        if len == 0 {
+        if choices_len == 0 {
             return;
         }
         picker.highlighted =
-            (picker.highlighted as isize + direction).rem_euclid(len as isize) as usize;
+            (picker.highlighted as isize + direction).rem_euclid(choices_len as isize) as usize;
+    }
+
+    fn select_scope_choice(&mut self) {
+        let choice = match &self.mode {
+            Mode::ScopePicker(picker) => {
+                self.scope_choices(picker).get(picker.highlighted).cloned()
+            }
+            _ => return,
+        };
+        if let Some(TypeChoice::Standard(value) | TypeChoice::CustomQuery(value)) = choice {
+            self.form.scope = Input::new(value);
+            self.reset_preview_scroll();
+        }
+        self.mode = Mode::Form;
+        self.focus = self.next_focus();
+        self.clear_validation_error();
+    }
+
+    fn move_scope_highlight(&mut self, direction: isize) {
+        let len = match &self.mode {
+            Mode::ScopePicker(picker) => self.scope_choices(picker).len(),
+            _ => return,
+        };
+        if len == 0 {
+            return;
+        }
+        if let Mode::ScopePicker(picker) = &mut self.mode {
+            picker.highlighted =
+                (picker.highlighted as isize + direction).rem_euclid(len as isize) as usize;
+        }
     }
 
     fn select_footer_name_choice(&mut self) {
@@ -1021,6 +1165,36 @@ impl App {
         }
         for character in value.chars() {
             self.edit_picker(Edit::Insert(character));
+        }
+    }
+
+    fn edit_scope_picker(&mut self, edit: Edit) {
+        let Mode::ScopePicker(picker) = &mut self.mode else {
+            return;
+        };
+        if let Edit::Insert(character) = edit {
+            if character.is_control() || matches!(character, '(' | ')') {
+                self.input_error = Some("Scope contains an invalid character");
+                return;
+            }
+            if picker.query.to_string().chars().count() >= MAX_SCOPE_LENGTH {
+                self.input_error = Some("Field is too long");
+                return;
+            }
+        }
+        picker.query.handle(edit.request());
+        picker.highlighted = 0;
+        self.input_error = None;
+    }
+
+    fn paste_scope_picker(&mut self, value: &str) {
+        let Ok(value) = sanitize_paste(value) else {
+            self.input_error =
+                Some("Paste contains unsupported control characters or is too large");
+            return;
+        };
+        for character in value.chars() {
+            self.edit_scope_picker(Edit::Insert(character));
         }
     }
 

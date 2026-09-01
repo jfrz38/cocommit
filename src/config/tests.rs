@@ -12,9 +12,25 @@ fn defaults_preserve_the_existing_signing_and_message_behavior() {
     assert!(config.ui.sign);
     assert_eq!(config.ui.sections, UiSections::default());
     assert_eq!(config.message.types[0], "feat");
+    assert!(!config.message.types_are_restricted);
     assert!(config.message.scope_suggestions.is_empty());
     assert_eq!(config.message.issue.prefix, "#");
     assert_eq!(config.message.issue.style, IssueStyle::Parenthesized);
+}
+
+#[test]
+fn rejects_empty_scope_suggestions() {
+    let directory = tempfile::tempdir().expect("temporary directory should be created");
+    let repository = repository_config_path(directory.path());
+    fs::write(
+        &repository,
+        "schema_version = 1\n[message]\nscope_suggestions = [\"\"]",
+    )
+    .expect("repository configuration should be written");
+
+    let error = load_from_paths(None, directory.path()).unwrap_err();
+
+    assert!(format!("{error:#}").contains("scope_suggestions"));
 }
 
 #[test]
@@ -120,6 +136,7 @@ style = "parenthesized"
 
     assert!(!config.ui.sign);
     assert_eq!(config.message.types, ["docs"]);
+    assert!(config.message.types_are_restricted);
     assert!(config.message.scope_suggestions.is_empty());
     assert_eq!(config.message.subject.max_length, Some(72));
     assert_eq!(

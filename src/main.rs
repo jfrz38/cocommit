@@ -50,7 +50,11 @@ fn run() -> Result<()> {
             if !excluded_files.is_empty() {
                 git::unstage(&working_directory, &excluded_files)?;
             }
-            git::commit(&working_directory, &draft.render_message(), sign)?;
+            git::commit(
+                &working_directory,
+                &draft.render_message_with_policy(&config.message),
+                sign,
+            )?;
         }
     }
     Ok(())

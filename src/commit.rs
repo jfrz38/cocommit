@@ -1,5 +1,7 @@
 //! Conventional Commit domain model and validation.
 
+use crate::config::{Capitalization, IssuePolicy, IssueStyle, MessagePolicy, TerminalPunctuation};
+
 /// A normalized Conventional Commit message ready to render or submit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitDraft {
@@ -60,6 +62,11 @@ pub enum ValidationErrorKind {
     IntegerOutOfRange,
     ContainsBlankLine,
     DuplicateSemanticField,
+    NotAllowed,
+    TooLong,
+    InvalidCapitalization,
+    TerminalPunctuationForbidden,
+    TerminalPunctuationRequired,
 }
 
 /// A validation error associated with one editable draft field.
@@ -142,6 +149,11 @@ impl CommitDraft {
 
     /// Renders the canonical Conventional Commit message.
     pub fn render_message(&self) -> String {
+        self.render_message_with_policy(&MessagePolicy::default())
+    }
+
+    /// Renders the message using the effective repository policy.
+    pub fn render_message_with_policy(&self, policy: &MessagePolicy) -> String {
         let mut message = self.commit_type.clone();
 
         if let Some(scope) = &self.scope {
@@ -158,9 +170,7 @@ impl CommitDraft {
         message.push_str(&self.message);
 
         if let Some(issue) = self.issue {
-            message.push_str(" (#");
-            message.push_str(&issue.to_string());
-            message.push(')');
+            message.push_str(&render_issue(issue, &policy.issue));
         }
 
         if let Some(body) = &self.body {
@@ -185,6 +195,11 @@ impl CommitDraft {
 
     /// Validates every field in a deterministic form order.
     pub fn validate(&self) -> Result<(), Vec<ValidationError>> {
+        self.validate_with_policy(&MessagePolicy::default())
+    }
+
+    /// Validates structural Conventional Commit rules and the effective repository policy.
+    pub fn validate_with_policy(&self, policy: &MessagePolicy) -> Result<(), Vec<ValidationError>> {
         let mut errors = Vec::new();
 
         if normalize(&self.commit_type).is_empty() {
@@ -210,6 +225,11 @@ impl CommitDraft {
             errors.push(validation_error(
                 DraftField::CommitType,
                 ValidationErrorKind::ContainsForbiddenCharacter,
+            ));
+        } else if policy.types_are_restricted && !policy.types.contains(&self.commit_type) {
+            errors.push(validation_error(
+                DraftField::CommitType,
+                ValidationErrorKind::NotAllowed,
             ));
         }
 
@@ -237,6 +257,8 @@ impl CommitDraft {
                 DraftField::Message,
                 ValidationErrorKind::MustBeSingleLine,
             ));
+        } else {
+            validate_subject_policy(&self.message, policy, &mut errors);
         }
 
         let mut has_breaking_footer = false;
@@ -280,6 +302,65 @@ impl CommitDraft {
     pub fn validated_message(&self) -> Result<String, Vec<ValidationError>> {
         self.validate()?;
         Ok(self.render_message())
+    }
+
+    /// Validates and renders through one policy-aware path.
+    pub fn validated_message_with_policy(
+        &self,
+        policy: &MessagePolicy,
+    ) -> Result<String, Vec<ValidationError>> {
+        self.validate_with_policy(policy)?;
+        Ok(self.render_message_with_policy(policy))
+    }
+}
+
+fn render_issue(issue: u64, policy: &IssuePolicy) -> String {
+    let value = format!("{}{}", policy.prefix, issue);
+    match policy.style {
+        IssueStyle::Parenthesized => format!(" ({value})"),
+        IssueStyle::Plain => format!(" {value}"),
+    }
+}
+
+fn validate_subject_policy(
+    message: &str,
+    policy: &MessagePolicy,
+    errors: &mut Vec<ValidationError>,
+) {
+    if policy
+        .subject
+        .max_length
+        .is_some_and(|limit| message.chars().count() > limit)
+    {
+        errors.push(validation_error(
+            DraftField::Message,
+            ValidationErrorKind::TooLong,
+        ));
+    }
+    if let Some(character) = message.chars().find(|character| character.is_alphabetic()) {
+        let invalid_case = match policy.subject.capitalization {
+            Capitalization::Allow => false,
+            Capitalization::Lowercase => character.is_uppercase(),
+            Capitalization::Uppercase => character.is_lowercase(),
+        };
+        if invalid_case {
+            errors.push(validation_error(
+                DraftField::Message,
+                ValidationErrorKind::InvalidCapitalization,
+            ));
+        }
+    }
+    let has_terminal_punctuation = message.ends_with(['.', '!', '?']);
+    match policy.subject.terminal_punctuation {
+        TerminalPunctuation::Forbid if has_terminal_punctuation => errors.push(validation_error(
+            DraftField::Message,
+            ValidationErrorKind::TerminalPunctuationForbidden,
+        )),
+        TerminalPunctuation::Require if !has_terminal_punctuation => errors.push(validation_error(
+            DraftField::Message,
+            ValidationErrorKind::TerminalPunctuationRequired,
+        )),
+        _ => {}
     }
 }
 

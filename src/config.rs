@@ -57,10 +57,12 @@ impl Default for UiSections {
     }
 }
 
-/// Repository message conventions. Enforcement begins in Iteration 18.
+/// Repository message conventions resolved from defaults and configuration layers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MessagePolicy {
     pub types: Vec<String>,
+    /// Whether `types` was explicitly configured and therefore restricts custom values.
+    pub types_are_restricted: bool,
     pub scope_suggestions: Vec<String>,
     pub subject: SubjectPolicy,
     pub issue: IssuePolicy,
@@ -70,6 +72,7 @@ impl Default for MessagePolicy {
     fn default() -> Self {
         Self {
             types: DEFAULT_TYPES.map(str::to_owned).to_vec(),
+            types_are_restricted: false,
             scope_suggestions: Vec::new(),
             subject: SubjectPolicy::default(),
             issue: IssuePolicy::default(),
@@ -313,11 +316,32 @@ fn validate_message_patch(patch: Option<&MessagePolicyPatch>) -> Result<()> {
         bail!("message policy types cannot be empty");
     }
     if patch.types.as_ref().is_some_and(|types| {
-        types
-            .iter()
-            .any(|commit_type| commit_type.trim().is_empty())
+        types.iter().any(|commit_type| {
+            commit_type.trim() != commit_type
+                || commit_type.is_empty()
+                || commit_type.contains(['\n', '\r'])
+                || commit_type.chars().any(char::is_whitespace)
+                || commit_type
+                    .chars()
+                    .any(|character| matches!(character, '(' | ')' | '!' | ':'))
+        })
     }) {
-        bail!("message policy types cannot contain empty values");
+        bail!("message policy types contain an invalid value");
+    }
+    if patch.scope_suggestions.as_ref().is_some_and(|scopes| {
+        scopes.iter().any(|scope| {
+            scope.is_empty() || scope.trim() != scope || scope.contains(['\n', '\r', '(', ')'])
+        })
+    }) {
+        bail!("message policy scope_suggestions contain an invalid value");
+    }
+    if patch
+        .issue
+        .as_ref()
+        .and_then(|issue| issue.prefix.as_ref())
+        .is_some_and(|prefix| prefix.chars().any(char::is_control))
+    {
+        bail!("message policy issue prefix cannot contain control characters");
     }
     if patch
         .subject
@@ -371,6 +395,7 @@ fn merge_ui(ui: &mut UiPreferences, patch: UiPreferencesPatch) {
 fn merge_message(message: &mut MessagePolicy, patch: MessagePolicyPatch) {
     if let Some(types) = patch.types {
         message.types = types;
+        message.types_are_restricted = true;
     }
     if let Some(scope_suggestions) = patch.scope_suggestions {
         message.scope_suggestions = scope_suggestions;
