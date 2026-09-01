@@ -18,30 +18,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  workflow-lint:
+    name: Validate workflows and shell fragments
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install --yes shellcheck
+      - name: Install actionlint
+        run: |
+          archive="actionlint_1.7.7_linux_amd64.tar.gz"
+          base_url="https://github.com/rhysd/actionlint/releases/download/v1.7.7"
+          curl --fail --location --retry 3 --output "$archive" "$base_url/$archive"
+          curl --fail --location --retry 3 --output checksums.txt "$base_url/actionlint_1.7.7_checksums.txt"
+          grep " $archive$" checksums.txt | sha256sum --check --status --
+          tar --extract --gzip --file "$archive" actionlint
+          install --mode 0755 actionlint /usr/local/bin/actionlint
+      - name: Validate GitHub Actions workflows
+        run: make check-workflows
+
   quality:
     name: Format, lint, test, and build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.94.1
         with:
           components: clippy, rustfmt
-      - uses: actions/cache@v4
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-rust-1.94.1-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - run: make check
+          cache-on-failure: true
+      - name: Verify Git is available
+        run: git --version
+      - run: make check-portability
 
   portability:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'schedule' ||
-      (github.event_name == 'pull_request' && github.base_ref == 'main')
     name: Portability (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -49,12 +65,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.94.1
-      - uses: actions/cache@v4
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-rust-1.94.1-cargo-${{ hashFiles('**/Cargo.lock') }}
-      # GNU Make is not guaranteed on Windows runners.
-      - run: cargo check --workspace --all-targets --all-features --locked
+          components: clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-on-failure: true
+      - name: Verify Git is available
+        run: git --version
+      # Mirrors `make check-portability`; GNU Make is not guaranteed on Windows runners.
+      - name: Run cross-platform quality suite
+        run: |
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+          cargo test --locked --all-targets --all-features
+          cargo build --release --locked --all-targets --all-features

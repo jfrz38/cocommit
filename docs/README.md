@@ -10,15 +10,16 @@ Read the documents in this order:
 4. [Git and configuration](git-and-configuration.md)
 5. [Testing strategy](testing-strategy.md)
 6. [Implementation plan](implementation-plan.md)
-7. [Roadmap](roadmap.md)
-8. [Releasing](releasing.md)
-9. [Architecture decisions](decisions/)
+7. [Terminal support](terminal-support.md)
+8. [Roadmap](roadmap.md)
+9. [Releasing](releasing.md)
+10. [Architecture decisions](decisions/)
 
 ## Project status
 
 - Initial planning: complete
 - Rust implementation: complete through Phase 9
-- Current work: pre-release roadmap; Iteration 18 repository policy enforcement is implemented
+- Current work: pre-release roadmap; Iteration 19 cross-platform quality is in progress
 - Release status: private pre-release; no public package or release exists
 - Supported scope: complete Conventional Commit composition from already staged changes
 

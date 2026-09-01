@@ -108,6 +108,25 @@ fn preflight_accepts_a_staged_repository_and_rejects_missing_staged_changes() {
 }
 
 #[test]
+fn preflight_rejects_a_bare_repository() {
+    if !require_git() {
+        return;
+    }
+    let parent = tempdir().expect("temporary repository parent should be created");
+    let repository = parent.path().join("repository.git");
+    run_git(parent.path(), ["init", "--bare", "repository.git"]);
+
+    let error = cocommit::git::preflight(&repository)
+        .expect_err("a bare repository should not be accepted as a working tree");
+
+    assert!(
+        error
+            .to_string()
+            .contains("not inside a usable Git working tree")
+    );
+}
+
+#[test]
 fn hidden_staged_section_commits_every_staged_file_without_unstaging() {
     if !require_git() {
         return;
@@ -178,7 +197,18 @@ fn resolves_the_work_tree_root_from_subdirectories_and_linked_worktrees() {
 
     let nested = repository.join("nested");
     fs::create_dir(&nested).expect("nested directory should be created");
-    assert_eq!(cocommit::git::work_tree_root(&nested).unwrap(), repository);
+    assert_eq!(
+        cocommit::git::work_tree_root(&nested)
+            .expect("work-tree root should resolve")
+            .canonicalize()
+            .expect("resolved work-tree root should exist"),
+        repository
+            .canonicalize()
+            .expect("repository directory should exist")
+    );
+    fs::write(repository.join("staged.txt"), "staged\n").expect("staged file should be written");
+    run_git(&repository, ["add", "staged.txt"]);
+    cocommit::git::preflight(&nested).expect("preflight should accept a nested directory");
 
     let linked_parent = tempdir().expect("linked worktree parent should be created");
     let linked = linked_parent.path().join("linked");
@@ -194,7 +224,19 @@ fn resolves_the_work_tree_root_from_subdirectories_and_linked_worktrees() {
                 .expect("temporary path should be valid Unicode"),
         ],
     );
-    assert_eq!(cocommit::git::work_tree_root(&linked).unwrap(), linked);
+    assert_eq!(
+        cocommit::git::work_tree_root(&linked)
+            .expect("linked work-tree root should resolve")
+            .canonicalize()
+            .expect("resolved linked work-tree root should exist"),
+        linked
+            .canonicalize()
+            .expect("linked work-tree directory should exist")
+    );
+    fs::write(linked.join("linked-staged.txt"), "staged\n")
+        .expect("linked worktree file should be written");
+    run_git(&linked, ["add", "linked-staged.txt"]);
+    cocommit::git::preflight(&linked).expect("preflight should accept a linked worktree");
 }
 
 #[test]
