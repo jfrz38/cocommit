@@ -1,3 +1,5 @@
+use crate::config::{Capitalization, IssueStyle, MessagePolicy, TerminalPunctuation};
+
 use super::{CommitDraft, DraftField, Footer, ValidationError, ValidationErrorKind};
 
 fn draft(
@@ -72,6 +74,46 @@ fn renders_custom_type() {
     assert_eq!(
         draft("release", None, false, "publish version", None).render_message(),
         "release: publish version"
+    );
+}
+
+#[test]
+fn enforces_policy_and_renders_the_configured_issue_format() {
+    let mut policy = MessagePolicy {
+        types: vec!["fix".to_owned()],
+        types_are_restricted: true,
+        ..MessagePolicy::default()
+    };
+    policy.subject.max_length = Some(13);
+    policy.subject.capitalization = Capitalization::Uppercase;
+    policy.subject.terminal_punctuation = TerminalPunctuation::Require;
+    policy.issue.prefix = "PROJ-".to_owned();
+    policy.issue.style = IssueStyle::Plain;
+
+    let valid = draft("fix", Some("api"), false, "Add endpoint.", Some(42));
+    assert_eq!(
+        valid.validated_message_with_policy(&policy),
+        Ok("fix(api): Add endpoint. PROJ-42".to_owned())
+    );
+    assert_eq!(
+        draft("feat", None, false, "Add endpoint.", None).validate_with_policy(&policy),
+        Err(vec![error(
+            DraftField::CommitType,
+            ValidationErrorKind::NotAllowed
+        )])
+    );
+    assert_eq!(
+        draft("fix", None, false, "add endpoint", None).validate_with_policy(&policy),
+        Err(vec![
+            error(
+                DraftField::Message,
+                ValidationErrorKind::InvalidCapitalization
+            ),
+            error(
+                DraftField::Message,
+                ValidationErrorKind::TerminalPunctuationRequired
+            ),
+        ])
     );
 }
 
