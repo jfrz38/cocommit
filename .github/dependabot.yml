@@ -8,6 +8,8 @@ updates:
     labels:
       - dependencies
       - rust
+    commit-message:
+      prefix: "[Dependency Update]"
     groups:
       cargo-dependencies:
         patterns:
@@ -21,6 +23,8 @@ updates:
     labels:
       - dependencies
       - github-actions
+    commit-message:
+      prefix: "[CI Update]"
     groups:
       github-actions:
         patterns:
