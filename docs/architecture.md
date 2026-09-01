@@ -145,7 +145,7 @@ parse CLI -> verify interactive streams -> preflight Git -> load config -> initi
 
 The terminal is restored before invoking Git. This is essential for hooks, signing prompts, pinentry, and normal Git output.
 
-Before loading repository configuration, `main` asks Git for the work-tree root. `config` merges built-in defaults, global preferences, and the root `.cocommit.toml` policy without depending on terminal rendering or message formatting. Global section visibility is passed to `App`; repository policy cannot alter it. The UI displays the effective subject policy as guidance, while the domain model does not enforce any policy until Iteration 18; this preserves one active validation and formatting path.
+Before loading repository configuration, `main` asks Git for the work-tree root. `config` merges built-in defaults, global preferences, and the root `.cocommit.toml` policy without depending on terminal rendering or message formatting. Global section visibility is passed to `App`; repository policy cannot alter it. App preview and submission pass the effective policy to the domain model, which provides the single validation and formatting path.
 
 Help and version exit before the interactive-stream and Git checks. Usage errors exit before terminal initialization. The executable maps usage errors to exit code `2`, while operational failures use `1` and successful cancellation uses `0`.
 

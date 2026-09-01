@@ -259,6 +259,8 @@ Completion criteria:
 
 ### Iteration 18: Repository policy enforcement
 
+Status: implemented.
+
 Configuration becomes valuable when the form can guide users toward the repository's actual conventions before a hook rejects the commit.
 
 Work:
