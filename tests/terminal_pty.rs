@@ -73,7 +73,7 @@ fn spawn_in_pty(directory: &TempDir) -> PtySession {
         .spawn_command(command)
         .expect("cocommit should start in the PTY");
     drop(pair.slave);
-    let reader = pair
+    let mut reader = pair
         .master
         .try_clone_reader()
         .expect("PTY reader should open");
