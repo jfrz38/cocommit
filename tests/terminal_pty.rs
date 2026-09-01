@@ -3,6 +3,7 @@
 use std::{
     io::{Read, Write},
     process::Command,
+    sync::mpsc::{self, Receiver},
     thread,
     time::{Duration, Instant},
 };
@@ -11,8 +12,21 @@ use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use tempfile::TempDir;
 
 type PtyChild = Box<dyn portable_pty::Child + Send + Sync>;
-type PtyReader = Box<dyn Read + Send>;
 type PtyWriter = Box<dyn Write + Send>;
+
+enum PtyReadEvent {
+    Bytes(Vec<u8>),
+    Eof,
+    Error(String),
+}
+
+struct PtySession {
+    child: PtyChild,
+    writer: Option<PtyWriter>,
+    events: Receiver<PtyReadEvent>,
+    reader_thread: Option<thread::JoinHandle<()>>,
+    output: Vec<u8>,
+}
 
 fn staged_repository() -> TempDir {
     let directory = tempfile::tempdir().expect("temporary repository should be created");
@@ -43,7 +57,7 @@ fn staged_repository() -> TempDir {
     directory
 }
 
-fn spawn_in_pty(directory: &TempDir) -> (PtyChild, PtyReader, PtyWriter) {
+fn spawn_in_pty(directory: &TempDir) -> PtySession {
     let pair = native_pty_system()
         .openpty(PtySize {
             rows: 24,
@@ -64,46 +78,162 @@ fn spawn_in_pty(directory: &TempDir) -> (PtyChild, PtyReader, PtyWriter) {
         .try_clone_reader()
         .expect("PTY reader should open");
     let writer = pair.master.take_writer().expect("PTY writer should open");
-    (child, reader, writer)
+    let (sender, events) = mpsc::channel();
+    let reader_thread = thread::spawn(move || {
+        loop {
+            let mut buffer = [0; 1024];
+            match reader.read(&mut buffer) {
+                Ok(0) => {
+                    let _ = sender.send(PtyReadEvent::Eof);
+                    return;
+                }
+                Ok(bytes_read) => {
+                    if sender
+                        .send(PtyReadEvent::Bytes(buffer[..bytes_read].to_vec()))
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
+                Err(error) => {
+                    let _ = sender.send(PtyReadEvent::Error(error.to_string()));
+                    return;
+                }
+            }
+        }
+    });
+
+    PtySession {
+        child,
+        writer: Some(writer),
+        events,
+        reader_thread: Some(reader_thread),
+        output: Vec::new(),
+    }
 }
 
-fn wait_for_exit(child: &mut dyn portable_pty::Child) -> portable_pty::ExitStatus {
-    let deadline = Instant::now() + Duration::from_secs(5);
-    loop {
-        if let Some(status) = child.try_wait().expect("child status should be readable") {
-            return status;
+impl PtySession {
+    fn wait_for_terminal_ready(&mut self) {
+        const ALTERNATE_SCREEN_ENTER: &[u8] = b"\x1b[?1049h";
+        let deadline = Instant::now() + Duration::from_secs(5);
+
+        loop {
+            if self
+                .output
+                .windows(ALTERNATE_SCREEN_ENTER.len())
+                .any(|window| window == ALTERNATE_SCREEN_ENTER)
+            {
+                return;
+            }
+
+            let remaining = deadline
+                .checked_duration_since(Instant::now())
+                .expect("cocommit did not initialize the terminal in time");
+            match self.events.recv_timeout(remaining) {
+                Ok(PtyReadEvent::Bytes(bytes)) => self.output.extend(bytes),
+                Ok(PtyReadEvent::Eof) => panic!(
+                    "PTY output ended before terminal initialization: {:?}",
+                    String::from_utf8_lossy(&self.output)
+                ),
+                Ok(PtyReadEvent::Error(error)) => panic!(
+                    "PTY output failed before terminal initialization: {error}; output: {:?}",
+                    String::from_utf8_lossy(&self.output)
+                ),
+                Err(mpsc::RecvTimeoutError::Timeout) => panic!(
+                    "cocommit did not initialize the terminal in time; output: {:?}",
+                    String::from_utf8_lossy(&self.output)
+                ),
+                Err(mpsc::RecvTimeoutError::Disconnected) => panic!(
+                    "PTY reader stopped before terminal initialization; output: {:?}",
+                    String::from_utf8_lossy(&self.output)
+                ),
+            }
         }
-        assert!(Instant::now() < deadline, "cocommit did not exit in time");
-        thread::sleep(Duration::from_millis(20));
+    }
+
+    fn write_input(&mut self, input: &[u8]) {
+        let writer = self.writer.as_mut().expect("PTY writer should remain open");
+        writer.write_all(input).expect("input should be sent");
+        writer.flush().expect("input should be flushed");
+    }
+
+    fn process_id(&self) -> u32 {
+        self.child
+            .process_id()
+            .expect("child should expose a process ID")
+    }
+
+    fn wait_for_exit(&mut self) -> portable_pty::ExitStatus {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            if let Some(status) = self
+                .child
+                .try_wait()
+                .expect("child status should be readable")
+            {
+                return status;
+            }
+            assert!(Instant::now() < deadline, "cocommit did not exit in time");
+            thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    fn finish_output(&mut self) -> String {
+        self.writer.take();
+        let deadline = Instant::now() + Duration::from_secs(5);
+
+        loop {
+            let remaining = deadline
+                .checked_duration_since(Instant::now())
+                .expect("PTY output did not close in time");
+            match self.events.recv_timeout(remaining) {
+                Ok(PtyReadEvent::Bytes(bytes)) => self.output.extend(bytes),
+                Ok(PtyReadEvent::Eof) => break,
+                Ok(PtyReadEvent::Error(error)) => panic!("PTY output failed: {error}"),
+                Err(mpsc::RecvTimeoutError::Timeout) => panic!("PTY output did not close in time"),
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+        }
+
+        self.reader_thread
+            .take()
+            .expect("PTY reader thread should remain available")
+            .join()
+            .expect("PTY reader thread should not panic");
+        String::from_utf8(self.output.clone()).expect("PTY output should be UTF-8")
+    }
+}
+
+impl Drop for PtySession {
+    fn drop(&mut self) {
+        self.writer.take();
+        if matches!(self.child.try_wait(), Ok(None)) {
+            let _ = self.child.kill();
+        }
+        let _ = self.child.wait();
     }
 }
 
 #[test]
 fn pty_cancel_exits_cleanly() {
     let directory = staged_repository();
-    let (mut child, _reader, mut writer) = spawn_in_pty(&directory);
-    writer.write_all(b"\x1b").expect("escape should be sent");
-    writer.flush().expect("escape should be flushed");
+    let mut session = spawn_in_pty(&directory);
+    session.wait_for_terminal_ready();
+    session.write_input(b"\x1b");
 
-    assert!(wait_for_exit(child.as_mut()).success());
+    assert!(session.wait_for_exit().success());
+    let _ = session.finish_output();
 }
 
 #[test]
 fn pty_space_does_not_restart_the_terminal_session() {
     let directory = staged_repository();
-    let (mut child, mut reader, mut writer) = spawn_in_pty(&directory);
-    writer
-        .write_all(b" \x1b")
-        .expect("space and escape should be sent");
-    writer.flush().expect("input should be flushed");
+    let mut session = spawn_in_pty(&directory);
+    session.wait_for_terminal_ready();
+    session.write_input(b" \x1b");
 
-    assert!(wait_for_exit(child.as_mut()).success());
-    drop(writer);
-
-    let mut output = String::new();
-    reader
-        .read_to_string(&mut output)
-        .expect("PTY output should be readable");
+    assert!(session.wait_for_exit().success());
+    let output = session.finish_output();
     assert_eq!(
         output.matches("\x1b[?1049h").count(),
         1,
@@ -114,11 +244,9 @@ fn pty_space_does_not_restart_the_terminal_session() {
 #[test]
 fn pty_sigterm_restores_before_terminating() {
     let directory = staged_repository();
-    let (mut child, mut reader, writer) = spawn_in_pty(&directory);
-    thread::sleep(Duration::from_millis(200));
-    let process_id = child
-        .process_id()
-        .expect("child should expose a process ID");
+    let mut session = spawn_in_pty(&directory);
+    session.wait_for_terminal_ready();
+    let process_id = session.process_id();
     assert!(
         Command::new("kill")
             .args(["-TERM", &process_id.to_string()])
@@ -127,13 +255,8 @@ fn pty_sigterm_restores_before_terminating() {
             .success()
     );
 
-    assert_eq!(wait_for_exit(child.as_mut()).exit_code(), 128 + 15);
-    drop(writer);
-
-    let mut output = String::new();
-    reader
-        .read_to_string(&mut output)
-        .expect("PTY output should be readable");
+    assert_eq!(session.wait_for_exit().exit_code(), 128 + 15);
+    let output = session.finish_output();
     assert!(
         output.contains("\x1b[?1049h"),
         "alternate screen was entered"
