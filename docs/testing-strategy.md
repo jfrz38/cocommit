@@ -117,7 +117,7 @@ cargo test --locked --all-targets --all-features
 cargo build --locked --all-targets --all-features
 ```
 
-Run `make check-portability` before changes to cross-platform behavior; it uses the release profile for the final build. After installing actionlint and ShellCheck, run `make check-workflows` to validate workflow YAML and embedded shell fragments. `make ci` combines `check`, `check-portability`, and `check-workflows` as local CI-equivalent checks.
+Run `make check-portability` before changes to cross-platform behavior; it uses the release profile for the final build. After installing actionlint and ShellCheck, run `make check-workflows` to validate workflow YAML, embedded shell fragments, full-SHA Action references, comments, privilege boundaries, Environment, and artifact/provenance contract. Install the fixed cargo-deny version with `make cargo-deny-install`, then run `make supply-chain-check` for advisories, licenses, and sources. `make ci` combines all local CI-equivalent checks.
 
 The `Makefile` is the source of truth for reusable quality commands: `make check-portability` runs formatting, Clippy, tests, and a release build, while `make check-workflows` runs actionlint with ShellCheck. GitHub Actions uses `check` and `check-portability` on Ubuntu. Windows and macOS mirror `check-portability` with direct Cargo commands only because GNU Make is not guaranteed on Windows runners. CI bootstraps actionlint and ShellCheck itself, then delegates their execution to `make check-workflows`. Every runner verifies `git --version` first, so the real-Git integration suite cannot silently skip in CI. All three operating systems run for pull requests to `develop` and `main`, scheduled runs, and manual dispatch.
 
@@ -140,7 +140,7 @@ git -C "$sandbox" show --stat --oneline HEAD
 
 ## Release workflow rehearsal
 
-The release workflow must be tested from GitHub Actions before its first use. A manual dispatch runs the validation job only and must not create a tag or GitHub Release. Review its log for the checked-out SHA, clean worktree check, `make release-check-clean`, and resolved version.
+The release workflow must be tested from GitHub Actions before its first use. A manual dispatch runs the validation job only and must not create a tag or GitHub Release. Review its log for the checked-out SHA, clean worktree check, `make release-check-clean`, resolved version, package, SBOM, checksums, and artifact transfer.
 
 For the automatic path, record evidence for these states in a private test repository or a non-release test version:
 
@@ -149,5 +149,8 @@ For the automatic path, record evidence for these states in a private test repos
 - A later `main` merge with the same package version is a no-op.
 - A tag without a release is completed without moving the tag.
 - A tag outside `main` history and a release without a tag fail without modifying either resource.
+- Identical assets are accepted on rerun; an existing asset with different bytes fails.
+- Tag ruleset update/deletion denial, Environment approval and cancellation before approval are recorded from a private rehearsal.
+- `sha256sum -c`, CycloneDX inspection, and `gh attestation verify` succeed for the candidate SHA.
 
 The manual publish workflow must be observed to validate the latest release before its OIDC publication job starts. It must never be dispatched for the first `0.1.0` publication, which uses the documented temporary-token procedure.
