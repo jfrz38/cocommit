@@ -2,8 +2,7 @@ name: Create Release
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -16,47 +15,36 @@ concurrency:
 jobs:
   validate-release:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     permissions:
       contents: read
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
       candidate_sha: ${{ steps.candidate.outputs.sha }}
-
+      version_changed: ${{ steps.version.outputs.changed }}
     steps:
-      - name: Check out repository
+      - name: Check out candidate
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
-
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.94.1
+        uses: dtolnay/rust-toolchain@75be91dd2711b583df57c31d0873b4145c89f1d9 # v1.94.1
         with:
           components: clippy, rustfmt
-
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           cache-on-failure: true
-
       - name: Verify candidate checkout
         id: candidate
         run: |
-          if [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]; then
-            echo "Checked out commit does not match the workflow candidate." >&2
-            exit 1
-          fi
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "Release validation requires a clean checkout." >&2
-            exit 1
-          fi
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
           echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-
       - name: Verify release candidate
         run: make release-check-clean
-
       - name: Compare package version with previous commit
         id: version-change
         uses: jfrz38/check-version-change@80c2b258363f69c3c952e05d6feaeab481f55e7f # v1
@@ -64,74 +52,109 @@ jobs:
           file-path: Cargo.toml
           compare-source: git-ref
           compare-ref: HEAD^
-
       - name: Resolve release version
         id: version
         env:
           VERSION: ${{ steps.version-change.outputs.local-version }}
-          PREVIOUS_VERSION: ${{ steps.version-change.outputs.compared-version }}
           VERSION_CHANGED: ${{ steps.version-change.outputs.changed }}
         run: |
-          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Cargo.toml must contain a stable semantic version, got: $VERSION" >&2
-            exit 1
-          fi
-          echo "Package version comparison: $PREVIOUS_VERSION -> $VERSION (changed: $VERSION_CHANGED)"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          {
+            echo "version=$VERSION"
+            echo "tag=v$VERSION"
+            echo "changed=$VERSION_CHANGED"
+          } >> "$GITHUB_OUTPUT"
+      - name: Install pinned SBOM generator
+        run: cargo install cargo-cyclonedx --version 0.5.7 --locked
+      - name: Produce release assets once
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          assets="target/release-assets"
+          rm -rf "$assets"
+          mkdir -p "$assets"
+          cargo package --locked --no-verify
+          package="target/package/cocommit-$VERSION.crate"
+          test -f "$package"
+          cp "$package" "$assets/cocommit-$VERSION.crate"
+          cargo cyclonedx --format json --override-filename "cocommit-$VERSION.cdx"
+          mv "cocommit-$VERSION.cdx.json" "$assets/cocommit-$VERSION.cdx.json"
+          jq -e '.bomFormat == "CycloneDX"' "$assets/cocommit-$VERSION.cdx.json" >/dev/null
+          (cd "$assets" && sha256sum "cocommit-$VERSION.crate" "cocommit-$VERSION.cdx.json" > "cocommit-$VERSION-SHA256SUMS")
+      - name: Transfer immutable release assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-assets-${{ steps.version.outputs.version }}-${{ steps.candidate.outputs.sha }}
+          path: target/release-assets
+          if-no-files-found: error
+          retention-days: 30
 
   create-release:
     needs: validate-release
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && needs.validate-release.outputs.version_changed == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: write
-
     steps:
-      - name: Create or verify GitHub release
+      - name: Download validated assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-assets-${{ needs.validate-release.outputs.version }}-${{ needs.validate-release.outputs.candidate_sha }}
+          path: release-assets
+      - name: Create or verify immutable release and assets
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.validate-release.outputs.tag }}
           CANDIDATE_SHA: ${{ needs.validate-release.outputs.candidate_sha }}
         run: |
-          TAG_OBJECT="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.type + " " + .object.sha' 2>/dev/null || true)"
-          RELEASE_EXISTS=false
+          set -euo pipefail
+          release_exists=false
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            RELEASE_EXISTS=true
+            release_exists=true
           fi
-
-          if [ -z "$TAG_OBJECT" ]; then
-            if [ "$RELEASE_EXISTS" = true ]; then
+          tag_object="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.type + " " + .object.sha' 2>/dev/null || true)"
+          if [ -z "$tag_object" ]; then
+            if [ "$release_exists" = true ]; then
               echo "Release $TAG exists but its tag does not." >&2
               exit 1
             fi
-            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
-              -f "ref=refs/tags/$TAG" \
-              -f "sha=$CANDIDATE_SHA"
-            TAG_OBJECT="commit $CANDIDATE_SHA"
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$TAG" -f "sha=$CANDIDATE_SHA"
+            tag_object="commit $CANDIDATE_SHA"
           fi
-
-          TAG_TYPE="${TAG_OBJECT%% *}"
-          TAG_SHA="${TAG_OBJECT#* }"
-          if [ "$TAG_TYPE" != "commit" ]; then
-            echo "Tag $TAG must be a lightweight tag that points directly to a commit." >&2
-            exit 1
+          test "${tag_object%% *}" = commit
+          tag_sha="${tag_object#* }"
+          test "$tag_sha" = "$CANDIDATE_SHA"
+          if [ "$release_exists" = false ]; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$tag_sha" --title "$TAG" --generate-notes
           fi
+          mkdir existing
+          for asset in release-assets/*; do
+            name="${asset##*/}"
+            if gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir existing --clobber 2>/dev/null; then
+              cmp -- "$asset" "existing/$name" || { echo "Existing asset $name differs." >&2; exit 1; }
+            else
+              gh release upload "$TAG" "$asset" --repo "$GITHUB_REPOSITORY"
+            fi
+          done
 
-          ANCESTRY="$(gh api "repos/$GITHUB_REPOSITORY/compare/$TAG_SHA...$CANDIDATE_SHA" --jq .status)"
-          if [ "$ANCESTRY" != "ahead" ] && [ "$ANCESTRY" != "identical" ]; then
-            echo "Tag $TAG at $TAG_SHA is not reachable from the main candidate $CANDIDATE_SHA." >&2
-            exit 1
-          fi
-
-          if [ "$RELEASE_EXISTS" = true ]; then
-            echo "Release $TAG already exists for immutable tag $TAG_SHA; nothing to create."
-            exit 0
-          fi
-
-          gh release create "$TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$TAG_SHA" \
-            --title "$TAG" \
-            --generate-notes
+  attest-assets:
+    needs: [validate-release, create-release]
+    if: github.event_name == 'push' && needs.validate-release.outputs.version_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download final assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-assets-${{ needs.validate-release.outputs.version }}-${{ needs.validate-release.outputs.candidate_sha }}
+          path: release-assets
+      - name: Attest candidate release assets
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        with:
+          subject-path: release-assets/*

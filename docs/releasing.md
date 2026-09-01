@@ -20,9 +20,9 @@ The repository must allow GitHub Actions to create pull requests at **Settings >
 
 ## Create the GitHub Release
 
-Every push to `main` runs **Create Release**. An unprivileged job checks out the exact pushed commit, requires a clean worktree, runs `make release-check-clean`, and uses `check-version-change` to compare the `Cargo.toml` version with the preceding commit. It uses the action's validated local stable SemVer as the release version. Only after that succeeds can the separate `contents: write` job create `v<version>` at that commit and generate GitHub release notes.
+Every push to `main` runs **Create Release**. An unprivileged job checks out the exact pushed commit, requires a clean worktree, runs `make release-check-clean`, and uses `check-version-change` to compare the `Cargo.toml` version with the preceding commit. It produces the `.crate`, CycloneDX JSON SBOM, and `SHA256SUMS` once from that checkout, then transfers them through a temporary artifact. Only after that succeeds can the separate `contents: write` job create `v<version>`, generate GitHub release notes, and attach those exact assets. A final isolated job attests the same files with GitHub build provenance.
 
-The tag is immutable. If the matching GitHub Release already exists, the workflow verifies its lightweight tag remains on a commit reachable from the pushed `main` commit and does nothing. A later merge with the same package version therefore does not rewrite a release. If a tag exists without a release, the workflow creates only the missing release. A release without a tag, an annotated tag, or a tag outside `main` history fails instead of moving or replacing anything.
+The tag is immutable. Existing tags must point to the exact candidate SHA, and existing assets must match byte-for-byte; a rerun uploads only missing assets and fails on a conflict. It never moves a tag or silently overwrites an asset.
 
 The workflow does not publish to crates.io.
 
@@ -40,9 +40,10 @@ After reviewing the GitHub Release, open **Publish Package** in GitHub Actions a
 2. Checks out its immutable tag.
 3. Verifies that the tag is reachable from `main` and that the tag version matches `Cargo.toml`.
 4. Verifies the version is not already present on crates.io.
-5. Runs `make release-check-clean` and records the package checksum.
+5. Downloads the release `.crate`, SBOM, and checksums; verifies SHA-256,
+   CycloneDX format, and GitHub provenance for the candidate SHA.
 
-The separate publication job checks out that exact tag, repackages without package verification, requires the checksum to match, and then publishes with a temporary crates.io token obtained through GitHub OIDC.
+The separate publication job is gated by the `crates-publish` Environment. It checks out that exact tag, repackages without package verification, requires the checksum to match the downloaded release package, and then publishes with a temporary crates.io token obtained through GitHub OIDC. It fails if Cargo's required reconstruction differs from the validated release bytes.
 
 The workflow never publishes the mutable `main` checkout and does not use a long-lived registry token. Only its publication job has `id-token: write`.
 
@@ -56,7 +57,7 @@ crates.io Trusted Publishing can only be configured after the crate's initial pu
 | Repository owner | `jfrz38` |
 | Repository name | `cocommit` |
 | Workflow filename | `publish.yml` |
-| Environment | Leave empty |
+| Environment | `crates-publish` |
 
 The `publish.yml` workflow requests `id-token: write`; `rust-lang/crates-io-auth-action` exchanges that identity for a short-lived token and revokes it when the job finishes.
 
@@ -88,8 +89,25 @@ Use the clean CI-equivalent validation for a committed candidate:
 make release-check-clean
 ```
 
+## Verify release assets
+
+Download the three release assets for the selected version, then verify them
+before installing or publishing:
+
+```bash
+sha256sum -c cocommit-<version>-SHA256SUMS
+jq -e '.bomFormat == "CycloneDX"' cocommit-<version>.cdx.json
+gh attestation verify cocommit-<version>.crate \
+  --repo jfrz38/cocommit \
+  --source-ref v<version> \
+  --source-digest <candidate-sha>
+```
+
+The checksums cover the package and SBOM. The attestation binds the package to
+the Create Release workflow and candidate commit.
+
 ## Approval and recovery
 
-Configure any required GitHub Environment approval outside this repository. A `release` Environment can protect the release-creation job, and a separate `crates-publish` Environment can protect the irreversible publication job.
+Configure `crates-publish` outside this repository with required reviewers, self-review prevention where available, and deployment branches restricted to `main`. Configure a ruleset for `refs/tags/v*` that prevents normal maintainers from moving or deleting tags while allowing the minimal Create Release bypass to create a new tag. Rehearse both controls privately and retain screenshots.
 
-Before crates.io publication, cancel a pending run or delete a mistaken GitHub Release only after confirming the immutable tag must remain for auditability. Never move or reuse that tag. After crates.io publication, use crates.io yanking where appropriate, mark the GitHub Release as withdrawn or superseded, and publish a corrected higher version.
+Before crates.io publication, cancel a pending run or delete a mistaken GitHub Release only after confirming the immutable tag must remain for auditability. Never move or reuse that tag. After crates.io publication, use crates.io yanking where appropriate, mark the GitHub Release as withdrawn or superseded, and publish a corrected higher version. See [Supply-chain operations](supply-chain-operations.md) for the incident playbook and user verification commands.

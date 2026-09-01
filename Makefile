@@ -1,4 +1,8 @@
 CARGO ?= cargo
+CARGO_DENY ?= cargo deny
+CARGO_DENY_VERSION := 0.20.2
+ACTIONLINT ?= actionlint
+SHELLCHECK ?= shellcheck
 
 .DEFAULT_GOAL := help
 
@@ -29,13 +33,24 @@ lint: ## run Clippy with warnings denied
 test: ## run all tests
 	$(CARGO) test --locked --all-targets --all-features
 
+.PHONY: cargo-deny-install cargo-deny-version supply-chain-check
+cargo-deny-install: ## install the pinned cargo-deny version
+	$(CARGO) install cargo-deny --version $(CARGO_DENY_VERSION) --locked
+
+cargo-deny-version: ## verify the installed cargo-deny version
+	@$(CARGO_DENY) --version | grep -F "cargo-deny $(CARGO_DENY_VERSION)"
+
+supply-chain-check: cargo-deny-version ## check dependency advisories, licenses, and sources
+	$(CARGO_DENY) check advisories licenses sources
+
 .PHONY: check check-portability check-workflows release-check release-check-clean ci
 check: fmt-check lint test build ## run all local quality checks
 
 check-portability: fmt-check lint test build-release ## run the cross-platform quality suite
 
 check-workflows: ## validate GitHub Actions workflows and embedded shell
-	actionlint -shellcheck=shellcheck
+	$(ACTIONLINT) -shellcheck=$(SHELLCHECK)
+	bash .github/scripts/check-workflows.sh
 
 release-check: check ## verify the package can be published
 	$(CARGO) publish --dry-run --locked --allow-dirty
@@ -43,4 +58,4 @@ release-check: check ## verify the package can be published
 release-check-clean: check ## verify a clean checkout can be published
 	$(CARGO) publish --dry-run --locked
 
-ci: check check-portability check-workflows ## run local CI-equivalent checks
+ci: check check-portability check-workflows supply-chain-check ## run local CI-equivalent checks
