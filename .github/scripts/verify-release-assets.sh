@@ -39,7 +39,7 @@ for target in "${targets[@]}"; do
     x86_64-pc-windows-msvc) archive="$assets/cocommit-$version-$target.zip" ;;
     *) archive="$assets/cocommit-$version-$target.tar.gz" ;;
   esac
-  .github/scripts/verify-distribution-archive.sh "$archive" "$version" "$target"
+  bash .github/scripts/verify-distribution-archive.sh "$archive" "$version" "$target"
 done
 
 echo 'Release assets match the distribution contract.'
