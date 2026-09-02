@@ -9,13 +9,7 @@ repository = "https://github.com/jfrz38/cocommit"
 readme = "README.md"
 keywords = ["git", "commit", "conventional-commits", "tui", "cli"]
 categories = ["command-line-utilities", "development-tools"]
-include = [
-  "Cargo.lock",
-  "Cargo.toml",
-  "LICENSE",
-  "README.md",
-  "src/**/*.rs",
-]
+include = ["Cargo.lock", "Cargo.toml", "LICENSE", "README.md", "src/**/*.rs"]
 
 [dependencies]
 anyhow = "1"
