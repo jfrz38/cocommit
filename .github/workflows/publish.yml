@@ -43,6 +43,12 @@ jobs:
             echo "version=$version"
             echo "candidate_sha=$candidate_sha"
           } >> "$GITHUB_OUTPUT"
+      - name: Check out release verification contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+          fetch-depth: 1
+          persist-credentials: false
       - name: Download release assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -58,14 +64,10 @@ jobs:
         run: |
           set -euo pipefail
           package="release-assets/cocommit-$VERSION.crate"
-          sbom="release-assets/cocommit-$VERSION.cdx.json"
-          sums="release-assets/cocommit-$VERSION-SHA256SUMS"
-          test -f "$package" && test -f "$sbom" && test -f "$sums"
-          (cd release-assets && sha256sum --check "$(basename "$sums")")
-          jq -e '.bomFormat == "CycloneDX"' "$sbom" >/dev/null
-          gh attestation verify "$package" --repo "$GITHUB_REPOSITORY" --source-digest "$CANDIDATE_SHA" --source-ref "$TAG"
-          gh attestation verify "$sbom" --repo "$GITHUB_REPOSITORY" --source-digest "$CANDIDATE_SHA" --source-ref "$TAG"
-          gh attestation verify "$sums" --repo "$GITHUB_REPOSITORY" --source-digest "$CANDIDATE_SHA" --source-ref "$TAG"
+          bash .github/scripts/verify-release-assets.sh release-assets "$VERSION"
+          for asset in release-assets/*; do
+            gh attestation verify "$asset" --repo "$GITHUB_REPOSITORY" --source-digest "$CANDIDATE_SHA" --source-ref "$TAG"
+          done
           echo "sha256=$(sha256sum "$package" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
       - name: Check out immutable release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
