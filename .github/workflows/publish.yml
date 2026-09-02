@@ -68,7 +68,7 @@ jobs:
           gh attestation verify "$sums" --repo "$GITHUB_REPOSITORY" --source-digest "$CANDIDATE_SHA" --source-ref "$TAG"
           echo "sha256=$(sha256sum "$package" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
       - name: Check out immutable release tag
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.release.outputs.tag }}
           fetch-depth: 0
@@ -96,7 +96,7 @@ jobs:
       id-token: write
     steps:
       - name: Check out validated release tag
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.validate-package.outputs.tag }}
           fetch-depth: 1
