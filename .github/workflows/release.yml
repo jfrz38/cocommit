@@ -47,7 +47,7 @@ jobs:
         run: make release-check-clean
       - name: Compare package version with previous commit
         id: version-change
-        uses: jfrz38/check-version-change@80c2b258363f69c3c952e05d6feaeab481f55e7f # v1
+        uses: jfrz38/check-version-change@c087b716b54ed45079f2440924db036f636539b3 # v1.3.1
         with:
           file-path: Cargo.toml
           compare-source: git-ref
