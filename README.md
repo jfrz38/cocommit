@@ -27,13 +27,21 @@ feat(api)!: add authentication (#123)
 
 ## Install
 
-Install `cocommit` from crates.io:
+After the first public release, install `cocommit` from crates.io:
 
 ```bash
 cargo install cocommit --locked
 ```
 
 The installed `cocommit` executable must be on your `PATH`.
+
+The same release also includes precompiled archives for Linux x86_64 GNU,
+Windows x86_64, macOS Intel, and macOS Apple Silicon. Verify the Release
+checksums and GitHub Artifact Attestations before using them. Windows and macOS
+archives are deliberately unsigned for `0.1.0`: SmartScreen or Gatekeeper can
+show a warning. If you do not want to accept that warning, install through
+Cargo instead. Linux ARM, Windows ARM, Homebrew, Scoop, and Winget are not
+provided for this release.
 
 ## Requirements
 

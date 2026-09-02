@@ -3,7 +3,9 @@
 ## Policy and evidence
 
 Run `make supply-chain-check` after dependency changes. It enforces the
-locked `deny.toml` policy for RustSec advisories, licenses, and sources. Do not
+locked `deny.toml` policy for RustSec advisories, licenses, and sources. Its
+advisory cache lives under Cargo's ignored `target/` directory so it cannot
+enter a package candidate. Do not
 add broad ignores: every exception must name the affected crate or advisory,
 the risk owner, reason, and review date.
 
@@ -25,8 +27,8 @@ verification output, and screenshots of the tag ruleset and Environment gate.
 4. Yank a published crates.io version when appropriate. Mark or withdraw the
    GitHub Release, but retain its tag and evidence for auditability.
 5. Publish a corrected, higher version. Never reuse a tag, version, or replace
-   an existing asset. Regenerate the `.crate`, SBOM, SHA256SUMS, and provenance
-   from the new candidate.
+   an existing asset. Regenerate the `.crate`, SBOM, native archives,
+   SHA256SUMS, and provenance from the new candidate.
 6. Communicate scope, remediation, and upgrade guidance. Preserve incident
    timeline, run URLs, checksums, attestations, and approval evidence.
 
