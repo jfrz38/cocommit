@@ -151,6 +151,8 @@ For the automatic path, record evidence for these states in a private test repos
 - A tag outside `main` history and a release without a tag fail without modifying either resource.
 - Identical assets are accepted on rerun; an existing asset with different bytes fails.
 - Tag ruleset update/deletion denial, Environment approval and cancellation before approval are recorded from a private rehearsal.
-- `sha256sum -c`, CycloneDX inspection, and `gh attestation verify` succeed for the candidate SHA.
+- `sha256sum -c`, CycloneDX inspection, and `gh attestation verify` succeed for every asset at the candidate SHA.
+- Each archive contains exactly its target/version root directory, executable, `LICENSE`, and `INSTALL.md`; execute the extracted binary on its native runner and verify `--version` and `--help`.
+- A clean isolated `cargo install --path` produces a binary reporting the Cargo package version.
 
 The manual publish workflow must be observed to validate the latest release before its OIDC publication job starts. It must never be dispatched for the first `0.1.0` publication, which uses the documented temporary-token procedure.

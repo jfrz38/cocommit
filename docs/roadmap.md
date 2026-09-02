@@ -309,7 +309,7 @@ Completion criteria:
 
 ### Iteration 20: Supply-chain hardening
 
-Status: in progress.
+Status: implementation complete; external GitHub controls and rehearsal evidence pending.
 
 Release automation must minimize the authority granted to dependencies, third-party Actions, and generated artifacts.
 
@@ -334,6 +334,8 @@ Completion criteria:
 - A supply-chain incident has a documented revocation and replacement procedure.
 
 ### Iteration 21: Distribution artifacts
+
+Status: in progress.
 
 `cargo install` remains the baseline installation path, but users should not need a Rust toolchain when verified binaries can be provided safely.
 

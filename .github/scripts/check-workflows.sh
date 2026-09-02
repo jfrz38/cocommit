@@ -16,5 +16,14 @@ grep -q 'check advisories licenses sources' Makefile
 grep -q 'candidate_sha' .github/workflows/release.yml
 grep -q 'SHA256SUMS' .github/workflows/release.yml
 grep -q 'attestation verify' .github/workflows/publish.yml
+grep -q 'x86_64-unknown-linux-gnu' .github/workflows/release.yml
+grep -q 'x86_64-pc-windows-msvc' .github/workflows/release.yml
+grep -q 'aarch64-apple-darwin' .github/workflows/release.yml
+grep -q '^  assemble-release-assets:$' .github/workflows/release.yml
+grep -q '^  verify-release-assets:$' .github/workflows/release.yml
+grep -A8 '^  build-binaries:$' .github/workflows/release.yml | grep -q 'contents: read'
+grep -A8 '^  verify-release-assets:$' .github/workflows/release.yml | grep -q 'contents: read'
+grep -q 'verify-release-assets.sh' .github/workflows/release.yml
+grep -q 'verify-release-assets.sh' .github/workflows/publish.yml
 
 echo 'Workflow supply-chain contract checks passed.'

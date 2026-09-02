@@ -20,7 +20,9 @@ The repository must allow GitHub Actions to create pull requests at **Settings >
 
 ## Create the GitHub Release
 
-Every push to `main` runs **Create Release**. An unprivileged job checks out the exact pushed commit, requires a clean worktree, runs `make release-check-clean`, and uses `check-version-change` to compare the `Cargo.toml` version with the preceding commit. It produces the `.crate`, CycloneDX JSON SBOM, and `SHA256SUMS` once from that checkout, then transfers them through a temporary artifact. Only after that succeeds can the separate `contents: write` job create `v<version>`, generate GitHub release notes, and attach those exact assets. A final isolated job attests the same files with GitHub build provenance.
+Every push to `main` runs **Create Release**. An unprivileged job checks out the exact pushed commit, requires a clean worktree, runs `make release-check-clean`, checks the Cargo package contents, and uses `check-version-change` to compare the `Cargo.toml` version with the preceding commit. It produces the `.crate` and CycloneDX JSON SBOM once from that checkout.
+
+Independent read-only runners build native binaries for Linux x86_64 GNU, Windows x86_64 MSVC, and macOS Apple Silicon from that candidate SHA. A separate job produces normalized archives, checksums, and their exact asset set. Each target's native runner extracts and executes the resulting archive before the separate `contents: write` job can create `v<version>`, generate GitHub release notes, and attach those exact assets. A final isolated job attests the same files with GitHub build provenance.
 
 The tag is immutable. Existing tags must point to the exact candidate SHA, and existing assets must match byte-for-byte; a rerun uploads only missing assets and fails on a conflict. It never moves a tag or silently overwrites an asset.
 
@@ -28,7 +30,7 @@ The workflow does not publish to crates.io.
 
 ## Rehearse the release validation
 
-Run **Create Release** manually from the commit or branch to validate. Manual dispatch executes only the unprivileged validation job; it cannot create a tag or GitHub Release. Confirm in the Actions UI that `create-release` is skipped and that the validation log reports the expected SHA and version.
+Run **Create Release** manually from the commit or branch to validate. Manual dispatch executes only the unprivileged validation, build, packaging, and archive-verification jobs; it cannot create a tag or GitHub Release. Confirm in the Actions UI that `create-release` and `attest-assets` are skipped and that the validation log reports the expected SHA and version.
 
 Run the normal `main` path only after recording the rehearsal evidence. Before its first use, use a private test version or repository to verify first creation, repeated execution, later merges with the same version, tag-only recovery, and conflicting-state failures.
 
@@ -40,8 +42,8 @@ After reviewing the GitHub Release, open **Publish Package** in GitHub Actions a
 2. Checks out its immutable tag.
 3. Verifies that the tag is reachable from `main` and that the tag version matches `Cargo.toml`.
 4. Verifies the version is not already present on crates.io.
-5. Downloads the release `.crate`, SBOM, and checksums; verifies SHA-256,
-   CycloneDX format, and GitHub provenance for the candidate SHA.
+5. Downloads every release asset; verifies the exact asset set, SHA-256,
+   CycloneDX format, archive layouts, and GitHub provenance for the candidate SHA.
 
 The separate publication job is gated by the `crates-publish` Environment. It checks out that exact tag, repackages without package verification, requires the checksum to match the downloaded release package, and then publishes with a temporary crates.io token obtained through GitHub OIDC. It fails if Cargo's required reconstruction differs from the validated release bytes.
 
@@ -91,20 +93,39 @@ make release-check-clean
 
 ## Verify release assets
 
-Download the three release assets for the selected version, then verify them
-before installing or publishing:
+Download all release assets for the selected version, then verify them before
+installing or publishing:
 
 ```bash
 sha256sum -c cocommit-<version>-SHA256SUMS
 jq -e '.bomFormat == "CycloneDX"' cocommit-<version>.cdx.json
-gh attestation verify cocommit-<version>.crate \
-  --repo jfrz38/cocommit \
-  --source-ref v<version> \
-  --source-digest <candidate-sha>
+for asset in cocommit-<version>.*; do
+  gh attestation verify "$asset" \
+    --repo jfrz38/cocommit \
+    --source-ref v<version> \
+    --source-digest <candidate-sha>
+done
 ```
 
-The checksums cover the package and SBOM. The attestation binds the package to
-the Create Release workflow and candidate commit.
+The checksums and attestations cover the package, SBOM, all native archives,
+and the checksum manifest. The attestation binds every asset to the Create
+Release workflow and candidate commit.
+
+## Native archives
+
+The release contains unsigned `.tar.gz` archives for Linux and macOS plus an
+unsigned `.zip` archive for Windows. Every archive contains the executable,
+`LICENSE`, and `INSTALL.md` under `cocommit-<version>-<target>/`. No release
+archive is currently provided for Linux ARM, Windows ARM, or other targets.
+
+Windows SmartScreen can identify `cocommit.exe` as coming from an unknown
+publisher. macOS Gatekeeper can require an explicit user decision before an
+unsigned, unnotarized binary runs. Verify checksums and the GitHub attestation
+first; users unwilling to accept those platform warnings should install the
+published package with `cargo install cocommit --locked` instead.
+
+Homebrew, Scoop, Winget, Authenticode, macOS Developer ID signing, and
+notarization are intentionally not part of `0.1.0`.
 
 ## Approval and recovery
 

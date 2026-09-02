@@ -6,6 +6,11 @@ CI runs formatting, Clippy, the complete test suite, and a release build on
 Ubuntu, Windows, and macOS. Every runner verifies that Git is available before
 running the suite, so real-Git integration coverage cannot be skipped in CI.
 
+Release validation additionally builds and executes packaged archives for
+Linux x86_64 GNU, Windows x86_64 MSVC, and macOS Apple Silicon.
+The Windows and macOS archives are intentionally unsigned; they are verified
+by checksum and GitHub Artifact Attestation rather than platform code signing.
+
 Unix runners also run the PTY lifecycle tests. They verify cancellation and
 that `SIGTERM` restores the alternate screen, bracketed paste mode, and cursor
 state. Windows relies on deterministic non-interactive tests because those PTY
