@@ -11,7 +11,6 @@ SHA-256 manifest, and native archives for these explicitly supported targets:
 
 - `x86_64-unknown-linux-gnu` as `.tar.gz`.
 - `x86_64-pc-windows-msvc` as `.zip`.
-- `x86_64-apple-darwin` as `.tar.gz`.
 - `aarch64-apple-darwin` as `.tar.gz`.
 
 Each archive has exactly one root directory named
@@ -35,8 +34,8 @@ crates.io with Cargo after the package is published.
 ## Consequences
 
 - Windows SmartScreen and macOS Gatekeeper can warn about downloaded binaries.
-- Linux targets other than x86_64 GNU, Windows ARM, and non-Intel/Apple Silicon
-  macOS systems are not supported by release archives.
+- Linux targets other than x86_64 GNU, Windows ARM, and Intel macOS are not
+  supported by release archives.
 - Homebrew, Scoop, Winget, code signing, and notarization remain post-release
   work.
 - The crates.io package is constrained to Cargo metadata, license, README

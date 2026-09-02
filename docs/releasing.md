@@ -22,7 +22,7 @@ The repository must allow GitHub Actions to create pull requests at **Settings >
 
 Every push to `main` runs **Create Release**. An unprivileged job checks out the exact pushed commit, requires a clean worktree, runs `make release-check-clean`, checks the Cargo package contents, and uses `check-version-change` to compare the `Cargo.toml` version with the preceding commit. It produces the `.crate` and CycloneDX JSON SBOM once from that checkout.
 
-Independent read-only runners build native binaries for Linux x86_64 GNU, Windows x86_64 MSVC, macOS Intel, and macOS Apple Silicon from that candidate SHA. A separate job produces normalized archives, checksums, and their exact asset set. Each target's native runner extracts and executes the resulting archive before the separate `contents: write` job can create `v<version>`, generate GitHub release notes, and attach those exact assets. A final isolated job attests the same files with GitHub build provenance.
+Independent read-only runners build native binaries for Linux x86_64 GNU, Windows x86_64 MSVC, and macOS Apple Silicon from that candidate SHA. A separate job produces normalized archives, checksums, and their exact asset set. Each target's native runner extracts and executes the resulting archive before the separate `contents: write` job can create `v<version>`, generate GitHub release notes, and attach those exact assets. A final isolated job attests the same files with GitHub build provenance.
 
 The tag is immutable. Existing tags must point to the exact candidate SHA, and existing assets must match byte-for-byte; a rerun uploads only missing assets and fails on a conflict. It never moves a tag or silently overwrites an asset.
 

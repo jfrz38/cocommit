@@ -12,7 +12,7 @@ target="$3"
 root="cocommit-$version-$target"
 
 case "$target" in
-  x86_64-unknown-linux-gnu|x86_64-apple-darwin|aarch64-apple-darwin)
+  x86_64-unknown-linux-gnu|aarch64-apple-darwin)
     expected_binary='cocommit'
     actual="$(tar --list --gzip --file "$archive" | sed 's:/$::' | sort -u)"
     ;;

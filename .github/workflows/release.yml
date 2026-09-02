@@ -106,9 +106,6 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             extension: .exe
-          - os: macos-13
-            target: x86_64-apple-darwin
-            extension: ''
           - os: macos-14
             target: aarch64-apple-darwin
             extension: ''
@@ -173,7 +170,6 @@ jobs:
           set -euo pipefail
           bash .github/scripts/package-distribution.sh "$VERSION" x86_64-unknown-linux-gnu "release-binaries/cocommit-x86_64-unknown-linux-gnu" release-assets
           bash .github/scripts/package-distribution.sh "$VERSION" x86_64-pc-windows-msvc "release-binaries/cocommit-x86_64-pc-windows-msvc.exe" release-assets
-          bash .github/scripts/package-distribution.sh "$VERSION" x86_64-apple-darwin "release-binaries/cocommit-x86_64-apple-darwin" release-assets
           bash .github/scripts/package-distribution.sh "$VERSION" aarch64-apple-darwin "release-binaries/cocommit-aarch64-apple-darwin" release-assets
           (cd release-assets && find . -maxdepth 1 -type f -printf '%f\n' | sort | xargs sha256sum > "cocommit-$VERSION-SHA256SUMS")
           bash .github/scripts/verify-release-assets.sh release-assets "$VERSION"
@@ -204,10 +200,6 @@ jobs:
             target: x86_64-pc-windows-msvc
             extension: .exe
             archive_extension: zip
-          - os: macos-13
-            target: x86_64-apple-darwin
-            extension: ''
-            archive_extension: tar.gz
           - os: macos-14
             target: aarch64-apple-darwin
             extension: ''

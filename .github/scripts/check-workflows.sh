@@ -18,7 +18,6 @@ grep -q 'SHA256SUMS' .github/workflows/release.yml
 grep -q 'attestation verify' .github/workflows/publish.yml
 grep -q 'x86_64-unknown-linux-gnu' .github/workflows/release.yml
 grep -q 'x86_64-pc-windows-msvc' .github/workflows/release.yml
-grep -q 'x86_64-apple-darwin' .github/workflows/release.yml
 grep -q 'aarch64-apple-darwin' .github/workflows/release.yml
 grep -q '^  assemble-release-assets:$' .github/workflows/release.yml
 grep -q '^  verify-release-assets:$' .github/workflows/release.yml
