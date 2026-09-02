@@ -20,7 +20,7 @@ Read the documents in this order:
 
 - Initial planning: complete
 - Rust implementation: complete through Phase 9
-- Current work: pre-release roadmap; Iteration 20 supply-chain hardening is in progress
+- Current work: pre-release roadmap; Iteration 21 distribution artifacts is in progress
 - Release status: private pre-release; no public package or release exists
 - Supported scope: complete Conventional Commit composition from already staged changes
 
