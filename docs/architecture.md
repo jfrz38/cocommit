@@ -6,7 +6,7 @@ The application is a synchronous Rust binary. Its behavior is small enough that 
 
 The Conventional Commit model is pure Rust and independent of Ratatui. UI code owns editing and rendering; Git code owns explicit Git commands.
 
-## Proposed structure
+## Current structure
 
 ```text
 Cargo.toml
@@ -14,21 +14,26 @@ Cargo.lock
 rust-toolchain.toml
 Makefile
 .github/
+  scripts/
   workflows/
-    ci.yml
-   src/
-   lib.rs
-   main.rs
-   cli.rs
+src/
   app.rs
+  cli.rs
   commit.rs
   config.rs
   event.rs
   git.rs
+  lib.rs
+  main.rs
   terminal.rs
   ui.rs
 tests/
+  cli.rs
   git_integration.rs
+  terminal_pty.rs
+docs/
+  decisions/
+  *.md
 ```
 
 `lib.rs` exposes the production modules to the binary and black-box integration tests. Unit tests can live beside their modules. The integration test is separate because it executes a real temporary Git repository.
@@ -89,7 +94,7 @@ impl CommitDraft {
 
 `Footer` holds an ordered trailer token and value. `render_message` is the sole formatter for header, optional body, and ordered footers; `validated_message` validates first and then delegates to it, preventing duplicate formatting logic. Iteration 15 establishes this model while Iteration 16 adds its editors to the TUI.
 
-`ValidationError` should identify its relevant form field so the UI can focus it after a failed submission.
+`ValidationError` identifies its relevant form field so the UI can focus it after a failed submission.
 
 ## Application state
 

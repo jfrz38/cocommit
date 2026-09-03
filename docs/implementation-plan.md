@@ -1,5 +1,8 @@
 # Implementation plan
 
+> Historical implementation record. The current pre-release work and release
+> gates are maintained in [roadmap.md](roadmap.md).
+
 ## Phase 1: Scaffold
 
 Create `Cargo.toml`, pin Rust 1.94.1 and edition 2024, add the selected dependencies, create the source modules, and version `Cargo.lock` because this is an application. Add `rust-toolchain.toml`, a Makefile for local quality checks, and the initial GitHub Actions CI workflow.
@@ -9,7 +12,7 @@ Completion criteria:
 - `cargo check --workspace --all-targets --all-features --locked` succeeds.
 - `make check` runs formatting, linting, tests, and a build with the locked dependency graph.
 - Module boundaries match [architecture.md](architecture.md).
-- CI runs the quality suite on Ubuntu and compile checks on Windows and macOS for release-boundary pull requests, scheduled runs, and manual runs.
+- CI runs the quality suite and release builds on Ubuntu, Windows, and macOS for release-boundary pull requests, scheduled runs, and manual runs.
 
 ## Phase 2: Commit domain
 
