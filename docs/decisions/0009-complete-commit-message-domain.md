@@ -16,11 +16,11 @@ Body text is free-form and may contain paragraphs. Its outer whitespace is trimm
 
 `BREAKING CHANGE` and `BREAKING-CHANGE` are accepted as equivalent input and canonicalized to `BREAKING CHANGE`. A header `!` and one breaking footer may coexist because both are valid Conventional Commits signals. At most one breaking footer is permitted. Other trailers, including repeated `Co-authored-by`, remain ordered and repeatable; there is no closed token list.
 
-The complete rendered message is passed as one `git commit -m` argument. No shell parsing, temporary message file, or alternate message transport is introduced. The current TUI continues to create header-only drafts until Iteration 16 exposes body and footer editing.
+The complete rendered message is passed as one `git commit -m` argument. No shell parsing, temporary message file, or alternate message transport is introduced. Iteration 16 exposes Body and footer editing in the TUI while retaining this model.
 
 ## Consequences
 
 - Preview and submission can share one deterministic complete-message renderer.
 - Future UI work edits structured data rather than parsing a free-text commit message.
 - Repeated ordinary trailers remain possible while conflicting breaking semantics fail before Git runs.
-- The public UI continues to support header composition only until its multiline controls are implemented.
+- The public UI edits structured complete messages without parsing free-text commit content.
