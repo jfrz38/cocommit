@@ -52,5 +52,5 @@ jobs:
           github-token: ${{ github.token }}
           commit-message: 'chore: bump version to {new-version}'
           pr-title: 'chore: bump version to {new-version}'
-          pr-body: 'Bumps cocommit from {current-version} to {next-version} using a {bump} release bump.'
+          pr-body: 'Bumps cocommit from {current-version} to {next-version} using a {bump} release bump. Before merge, finalize CHANGELOG.md and the release-note entry for this version.'
           pre-commit-commands: cargo generate-lockfile
