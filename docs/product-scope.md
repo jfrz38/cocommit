@@ -2,9 +2,9 @@
 
 ## Purpose
 
-`cocommit` is a small Rust terminal UI for creating Conventional Commits. It guides the user through the commit header fields and continuously previews the final message before executing `git commit`.
+`cocommit` is a small Rust terminal UI for creating complete Conventional Commits. It guides the user through header, body, and footer fields and continuously previews the final message before executing `git commit`.
 
-The sole v1 workflow is:
+The sole `0.1` workflow is:
 
 1. Run `cocommit` inside a Git working tree with staged changes.
 2. Complete the commit fields using the keyboard.
@@ -52,7 +52,7 @@ The interface supports an optional multiline body and ordered footers, separated
 - Refuse to open the form when standard input or standard output is not an interactive terminal.
 - Show Git's own output when committing succeeds or fails.
 
-## Non-goals for v1
+## Non-goals for 0.1
 
 - Staging files.
 - Full diff viewing, history, branches, pushing, or pull requests.
@@ -63,4 +63,4 @@ The interface supports an optional multiline body and ordered footers, separated
 - Executing commitlint configuration, plugins, or arbitrary repository code. Supported static repository message policy is enforced as documented in ADR 0012.
 - Dry-run, copy-only mode, or CLI prefill arguments.
 
-These ideas may be reconsidered only after the focused commit-header workflow is stable.
+These ideas may be reconsidered only after the focused complete-message workflow is stable.

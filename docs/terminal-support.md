@@ -18,10 +18,11 @@ and signal semantics are Unix-specific.
 
 ## Release-candidate terminal matrix
 
-Before a release candidate is accepted, record the operating-system version,
-terminal version, Git version, result, and any observed limitation for every
-row below. A failed row blocks the candidate until it is fixed, explicitly
-removed from the supported set, or accepted as a documented limitation.
+Before a release candidate is accepted, record the date, operator,
+operating-system version, terminal version, Git version, result, and any
+observed limitation for every row below. A failed row blocks the candidate
+until it is fixed, explicitly removed from the supported set, or accepted as a
+documented limitation with a workaround.
 
 | Environment | Required checks |
 |---|---|
@@ -36,6 +37,10 @@ removed from the supported set, or accepted as a documented limitation.
 The current known limitation is that some terminals send `Ctrl+Enter` as
 `Enter`. In those terminals, focus `Commit` and press `Enter` instead. Record
 whether each tested terminal distinguishes the key combination.
+
+If rendering is corrupted or required keys cannot be encoded, cancel the form,
+record the terminal and key sequence, and use a supported terminal. Do not mark
+that environment supported until the documented checks pass.
 
 ## Manual procedure
 

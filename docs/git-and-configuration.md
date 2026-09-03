@@ -157,9 +157,11 @@ scope_suggestions = []
 max_length = 72
 ```
 
-`types` is the future allowed-type list and cannot be empty. Scope suggestions are never a restriction. Issue identifiers will remain decimal numbers; `prefix` and `style` support common renderings without templates or regular expressions. The only supported scope syntax is `type(scope): subject`; `[]` and `<>` are deliberately not configurable.
+`types` is an allowed-type list when explicitly configured and cannot be empty. Scope suggestions are never a restriction. Issue identifiers remain decimal numbers; `prefix` and `style` support common renderings without templates or regular expressions. The only supported scope syntax is `type(scope): subject`; `[]` and `<>` are deliberately not configurable.
 
-Configured types, subject rules, issue formatting, and scope suggestions apply to the composer, preview, and submitted message. Configured types are an allow-list only when `[message].types` is explicitly present; scope suggestions remain optional. The legacy global file must be migrated manually from `sign = false` to `[ui]\nsign = false` before adding schema-versioned fields. No file is rewritten automatically.
+Configured types, subject rules, issue formatting, and scope suggestions apply to the composer, preview, and submitted message. Configured types are an allow-list only when `[message].types` is explicitly present; scope suggestions remain optional. The legacy global file must be migrated manually from `sign = false` to a schema-versioned `[ui]` table before adding policy. No file is rewritten automatically.
+
+For example, a global `[message.subject] max_length = 100` remains effective when the repository omits it, while repository `max_length = 72` replaces only that field. List values replace the lower-priority list in full. See [Compatibility and deprecation](compatibility.md) before changing the schema.
 
 ## Validation contract
 

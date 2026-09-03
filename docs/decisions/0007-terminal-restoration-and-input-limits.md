@@ -16,11 +16,11 @@ On Unix, a dedicated signal thread restores state and terminates with the conven
 
 Job-control suspension is deliberately unsupported during the form. Raw mode prevents terminal-generated `Ctrl+Z` suspension, and users should cancel before suspending the process. Resuming an externally suspended process is not guaranteed to reinitialize the form terminal state.
 
-One-line fields use character-count limits: type 64, scope 128, subject 512, and issue 20. A paste is capped at 4096 characters. Newlines in a paste become one space per contiguous line break; NUL, escape, and all other control characters are rejected. A rejected edit or paste leaves the field unchanged and displays concise feedback.
+One-line fields use character-count limits: type 64, scope 128, subject 512, and issue 20. A paste is capped at 4096 characters. Newlines in a one-line-field paste become one space per contiguous line break; NUL, escape, and all other control characters are rejected. A rejected edit or paste leaves the field unchanged and displays concise feedback. ADR 0009 and Iteration 16 extend this with multiline Body and footer-value editing, bounded respectively at 4096 and 2048 characters.
 
 ## Consequences
 
 - Cleanup has one implementation across ordinary and abnormal paths.
 - The process preserves panic diagnostics and does not leave a supported Unix terminal in raw mode after a handled termination signal.
 - Input size and character handling are deterministic and testable without coupling validation to rendering.
-- Multiline bodies and larger field limits will require an explicit future decision.
+- Multiline Body and footer editing follow the bounded model described above.

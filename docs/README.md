@@ -14,13 +14,15 @@ Read the documents in this order:
 8. [Roadmap](roadmap.md)
 9. [Releasing](releasing.md)
 10. [Supply-chain operations](supply-chain-operations.md)
-11. [Architecture decisions](decisions/)
+11. [Compatibility and deprecation](compatibility.md)
+12. [Architecture decisions](decisions/)
 
 ## Project status
 
 - Initial planning: complete
 - Rust implementation: complete through Phase 9
-- Current work: pre-release roadmap; Iteration 21 distribution artifacts is in progress
+- Current work: pre-release roadmap; Iteration 22 documentation and governance
+- Iteration 21: implementation complete; release-rehearsal evidence remains pending
 - Release status: private pre-release; no public package or release exists
 - Supported scope: complete Conventional Commit composition from already staged changes
 

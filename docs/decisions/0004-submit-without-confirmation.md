@@ -10,7 +10,7 @@ The user needs protection from accidental commits, but a confirmation dialog add
 
 ## Decision
 
-Make Commit a separately focusable action. Only Enter on that action submits; Enter in editable fields advances or selects.
+Make Commit a separately focusable action. Enter on that action submits; Enter in editable fields advances or selects. `Ctrl+Enter` is the additional explicit submit shortcut from form fields.
 
 ## Consequences
 

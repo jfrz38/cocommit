@@ -335,7 +335,7 @@ Completion criteria:
 
 ### Iteration 21: Distribution artifacts
 
-Status: in progress.
+Status: implementation complete; release-rehearsal evidence pending.
 
 `cargo install` remains the baseline installation path, but users should not need a Rust toolchain when verified binaries can be provided safely.
 
@@ -357,6 +357,8 @@ Completion criteria:
 - Unsupported targets and unsigned-binary warnings are explicit.
 
 ### Iteration 22: Documentation and governance
+
+Status: implementation complete; external-user and manual verification evidence pending.
 
 An external user must be able to install, configure, operate, diagnose, and report problems without internal project knowledge.
 

@@ -2,10 +2,6 @@
 
 **Craft complete Conventional Commit messages without leaving your terminal.**
 
-[![CI](https://github.com/jfrz38/cocommit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jfrz38/cocommit/actions/workflows/ci.yml)
-[![Crates.io](https://img.shields.io/crates/v/cocommit?logo=rust)](https://crates.io/crates/cocommit)
-[![Downloads](https://img.shields.io/crates/d/cocommit)](https://crates.io/crates/cocommit)
-[![License](https://img.shields.io/github/license/jfrz38/cocommit)](LICENSE)
 [![MSRV](https://img.shields.io/badge/rustc-1.94.1%2B-blue)](https://www.rust-lang.org)
 
 `cocommit` is a small keyboard-driven terminal UI for reviewing and refining staged changes before creating complete Conventional Commit messages. It previews the message as you edit it, then delegates Git operations to your installed Git CLI.
@@ -27,15 +23,16 @@ feat(api)!: add authentication (#123)
 
 ## Install
 
-After the first public release, install `cocommit` from crates.io:
+`cocommit` is not published yet. Build and run a checkout today:
 
 ```bash
-cargo install cocommit --locked
+cargo install --path . --locked
 ```
 
 The installed `cocommit` executable must be on your `PATH`.
 
-The same release also includes precompiled archives for Linux x86_64 GNU,
+After the first public release, `cargo install cocommit --locked` will be the
+baseline installation command. The same release will include archives for Linux x86_64 GNU,
 Windows x86_64, and macOS Apple Silicon. Verify the Release
 checksums and GitHub Artifact Attestations before using them. Windows and macOS
 archives are deliberately unsigned for `0.1.0`: SmartScreen or Gatekeeper can
@@ -91,11 +88,24 @@ The interactive command requires both standard input and standard output to be t
 | `1` | Configuration, preflight, terminal, or Git commit failure. |
 | `2` | Invalid command-line usage. |
 
+## Complete messages
+
+The preview and Git receive one canonical message. For example:
+
+```text
+feat(api)!: add authentication (#123)
+
+Require an access token for protected routes.
+
+BREAKING CHANGE: Unauthenticated requests now fail.
+Closes: #123
+```
+
 ## Validation
 
-All text fields are trimmed before validation and rendering. The type is required and cannot contain whitespace, `(`, `)`, `!`, or `:`. Scope cannot contain parentheses, and a non-empty issue must be a decimal integer. The message must be present and one line, but cocommit does not impose capitalization, punctuation, or tense rules. Interactive limits are 64 characters for type, 128 for scope, 512 for message, 20 for issue, and 4096 for a single paste.
+All text fields are trimmed before validation and rendering. The type is required and cannot contain whitespace, `(`, `)`, `!`, or `:`. Scope cannot contain parentheses, and a non-empty issue must be a decimal integer. The message must be present and one line, but cocommit does not impose capitalization, punctuation, or tense rules. Limits are 64 characters for type and footer token, 128 for scope, 512 for subject, 20 for issue, 4096 for body and a single paste, 2048 for each footer value, and 32 footers.
 
-Invalid submission keeps the form open, displays a field-specific error, and focuses the first invalid field. Pasted line breaks are converted to spaces. NUL, escape, and other control characters are rejected; rejected input leaves the field unchanged.
+Invalid submission keeps the form open, displays a field-specific error, and focuses the first invalid field. Pasted line breaks are converted to spaces in one-line fields, while Body and footer values preserve normalized line breaks. NUL, escape, and other control characters are rejected; rejected input leaves the field unchanged.
 
 ## Keyboard Controls
 
@@ -150,7 +160,7 @@ footers = true
 issue = true
 ```
 
-For repository conventions, add `.cocommit.toml` at the Git work-tree root. cocommit resolves that root through Git, so the same file applies when it runs from a subdirectory or linked worktree. Configuration precedence is built-in defaults, global configuration, then repository configuration; a future CLI layer will be higher priority. UI preferences remain global, while the repository file accepts only message policy:
+For repository conventions, add `.cocommit.toml` at the Git work-tree root. cocommit resolves that root through Git, so the same file applies when it runs from a subdirectory or linked worktree. Configuration precedence is built-in defaults, global configuration, then repository configuration; a future CLI layer will be higher priority. A repository `max_length = 72` overrides a global `max_length = 100`, while its omitted fields retain the global value. UI preferences remain global, while the repository file accepts only message policy:
 
 ```toml
 schema_version = 1
@@ -173,7 +183,7 @@ Every `ui.sections` value defaults to `true`; they are global-only preferences, 
 
 An explicitly configured `types` list is an allowed-type list; without it, standard types remain suggestions and custom types are accepted. Scope suggestions remain non-blocking. Issue identifiers remain decimal numbers; `prefix` and `style` select a closed rendering convention. The Conventional Commits scope syntax is fixed as `type(scope): subject`; `[]` and `<>` are not supported. Policy applies to picker choices, validation, preview, and the rendered Git message.
 
-New configuration files require `schema_version = 1`. The legacy global `sign` form remains supported but cannot be mixed with schema-versioned fields; migrate it manually to `[ui]\nsign = false` before adding policy. Unknown keys, unsupported versions, invalid TOML, and unreadable existing files are reported with their path before the interface opens. cocommit never creates or rewrites configuration files or directories.
+New configuration files require `schema_version = 1`. The legacy global `sign` form remains supported but cannot be mixed with schema-versioned fields; migrate it manually to a versioned `[ui]` table before adding policy. Unknown keys, unsupported versions, invalid TOML, and unreadable existing files are reported with their path before the interface opens. cocommit never creates or rewrites configuration files or directories. See [Git and configuration](docs/git-and-configuration.md) for the complete schema.
 
 ## Git Behavior
 
@@ -185,11 +195,14 @@ After a valid submission, cocommit restores the terminal and runs `git commit` w
 
 - `Git executable was not found`: install Git and make sure `git` is on `PATH` in the terminal where you run cocommit.
 - A preflight error names the failing Git command and includes Git's stderr. Follow that output for `safe.directory`, permission, repository, or index problems.
+- Configuration errors include the affected path. Fix unknown keys, schema version, or TOML syntax and restart; cocommit does not modify the file.
+- Run inside a non-bare working tree with staged changes. Use `git status` and `git add` to prepare the index; cocommit does not stage files.
+- Hook or signing failures are Git failures. Correct the Git, hook, key, agent, or pinentry problem and rerun cocommit. Drafts are not persisted; excluded files have already been unstaged when Git is invoked.
 - `standard input` or `standard output must be an interactive terminal`: run cocommit directly in a terminal instead of through a pipe, redirection, or non-interactive task runner. `--help` and `--version` remain usable in those contexts.
 - cocommit restores its terminal modes after normal completion, panic, and on Unix `SIGHUP`, `SIGINT`, `SIGQUIT`, or `SIGTERM`. If the terminal is still corrupted, run `reset` on Unix or open a new terminal session.
 - Job-control suspension is not supported while the form is open. Cancel cocommit before suspending it; resuming an externally suspended process is not guaranteed to restore the form state.
 
-## v1 Limitations
+## 0.1 limitations
 
 - Amend mode and empty commits are not supported.
 - cocommit does not stage files, render full diffs or history, manage branches, push, or create pull requests.
@@ -235,3 +248,11 @@ make release-check
 ## License
 
 [MIT](LICENSE)
+
+## Project links
+
+- [Documentation](docs/README.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Changelog](CHANGELOG.md)
+- [Compatibility policy](docs/compatibility.md)
