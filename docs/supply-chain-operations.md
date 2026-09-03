@@ -12,6 +12,8 @@ the risk owner, reason, and review date.
 For every private release rehearsal, record the workflow run URLs, candidate
 SHA, package version, tool versions, checksum verification output, attestation
 verification output, and screenshots of the tag ruleset and Environment gate.
+Use [SECURITY.md](../SECURITY.md) for private vulnerability reports and
+[CHANGELOG.md](../CHANGELOG.md) for the public remediation and upgrade record.
 
 ## Advisory or compromise response
 

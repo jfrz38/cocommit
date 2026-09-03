@@ -10,6 +10,11 @@
 
 The package version in `Cargo.toml`, its `v<version>` tag, its GitHub Release, and the crates.io version must all match.
 
+Before merging a version bump, move reviewed user-visible changes from
+`Unreleased` to the versioned entry in [CHANGELOG.md](../CHANGELOG.md). That
+entry is the source for the GitHub Release notes; generated notes may supplement
+it but must not replace the reviewed changelog.
+
 ## Prepare a version
 
 In GitHub Actions, run **Bump Version** and select `patch`, `minor`, or `major`. Its default base branch is `develop`. The workflow opens a draft pull request named `chore/bump-version-<version>` and updates both `Cargo.toml` and `Cargo.lock`.
@@ -99,7 +104,7 @@ installing or publishing:
 ```bash
 sha256sum -c cocommit-<version>-SHA256SUMS
 jq -e '.bomFormat == "CycloneDX"' cocommit-<version>.cdx.json
-for asset in cocommit-<version>.*; do
+for asset in cocommit-<version>-* cocommit-<version>.crate cocommit-<version>.cdx.json; do
   gh attestation verify "$asset" \
     --repo jfrz38/cocommit \
     --source-ref v<version> \
@@ -131,4 +136,4 @@ notarization are intentionally not part of `0.1.0`.
 
 Configure `crates-publish` outside this repository with required reviewers, self-review prevention where available, and deployment branches restricted to `main`. Configure a ruleset for `refs/tags/v*` that prevents normal maintainers from moving or deleting tags while allowing the minimal Create Release bypass to create a new tag. Rehearse both controls privately and retain screenshots.
 
-Before crates.io publication, cancel a pending run or delete a mistaken GitHub Release only after confirming the immutable tag must remain for auditability. Never move or reuse that tag. After crates.io publication, use crates.io yanking where appropriate, mark the GitHub Release as withdrawn or superseded, and publish a corrected higher version. See [Supply-chain operations](supply-chain-operations.md) for the incident playbook and user verification commands.
+Before tag creation, fix validation failures on a new candidate and repeat the rehearsal. If asset upload or attestation fails after a release exists, rerun the workflow for the same immutable candidate; never use a later unchanged-version `main` commit. Before crates.io publication, cancel a pending run or delete a mistaken GitHub Release only after confirming the immutable tag must remain for auditability. Never move or reuse that tag. After crates.io accepts a package, use yanking where appropriate, mark the GitHub Release as withdrawn or superseded, and publish a corrected higher version. See [Supply-chain operations](supply-chain-operations.md) for the incident playbook and user verification commands.
