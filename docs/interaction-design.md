@@ -77,7 +77,7 @@ When Body is visible, it accepts multiline text and preserves paragraph breaks. 
 | `Ctrl+C` | Cancel application | Cancel application |
 | Printable text | Open Type picker with the character when Type is focused; otherwise edit focused text field | Filter choices |
 | Backspace/Delete/Home/End | Edit focused text field | Edit search query |
-| Paste | Open Type picker with sanitized text when Type is focused; otherwise insert sanitized one-line text | Insert sanitized search query |
+| Paste | Open Type picker with sanitized text when Type is focused; otherwise insert sanitized one-line text, except multiline Body and footer values | Insert sanitized search query |
 
 Vim `j` and `k` are intentionally not navigation shortcuts because they must remain searchable type characters.
 
@@ -115,9 +115,9 @@ On cancel, restore the terminal and return success without invoking Git. On vali
 
 - Process only Crossterm `KeyEventKind::Press` to avoid duplicate actions on platforms that emit release events.
 - Handle `Resize` by redrawing.
-- Treat paste explicitly and remove or reject line breaks before they reach one-line fields.
-- Convert contiguous pasted line breaks to one space. Reject NUL, escape, and other control characters, and keep the current value unchanged when a field or paste limit is exceeded.
-- Limit type to 64 characters, scope to 128, message to 512, issue to 20, and a single paste to 4096 characters. Show concise feedback in Error for rejected input.
+- Treat paste explicitly and remove or reject line breaks before they reach one-line fields. Preserve normalized line breaks in Body and footer values.
+- Convert contiguous pasted line breaks to one space only for one-line fields. Reject NUL, escape, and other control characters, and keep the current value unchanged when a field or paste limit is exceeded.
+- Limit type and footer token to 64 characters, scope to 128, subject to 512, issue to 20, body and a single paste to 4096, footer values to 2048, and footer count to 32. Show concise feedback in Error for rejected input.
 - Ignore focus and mouse events in v1.
 
 ## Staged-change context
