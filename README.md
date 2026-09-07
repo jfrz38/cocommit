@@ -98,5 +98,4 @@ Use `make release-check` before a release. See
 [Contributing](https://github.com/jfrz38/cocommit/blob/main/CONTRIBUTING.md),
 [Security](https://github.com/jfrz38/cocommit/blob/main/SECURITY.md),
 [Changelog](CHANGELOG.md),
-[architecture](https://github.com/jfrz38/cocommit/blob/main/docs/architecture.md),
-and [releasing](https://github.com/jfrz38/cocommit/blob/main/docs/releasing.md).
+and [architecture](https://github.com/jfrz38/cocommit/blob/main/docs/architecture.md).
