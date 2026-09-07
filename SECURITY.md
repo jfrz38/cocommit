@@ -15,5 +15,4 @@ fix is available.
 
 ## Supported versions
 
-The latest stable release is supported. Support and end-of-life status are
-recorded in [CHANGELOG.md](CHANGELOG.md).
+The latest stable release is supported.

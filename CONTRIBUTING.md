@@ -21,7 +21,7 @@ change limited to its stated behavior; do not add general Git-client features.
   parsing or reimplement Git behavior.
 - Keep repository message policy separate from global UI preferences.
 - Add or update stable automated tests for behavior changes.
-- Update the README, configuration guide, or changelog when the change affects them.
+- Update the README or configuration guide when the change affects them.
 
 Run the relevant checks before opening a pull request:
 
