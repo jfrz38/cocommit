@@ -14,7 +14,7 @@ showing exactly what Git will receive.
 
 The name combines **CO**nventional and **COMMIT**s, hence the coconut 🥥.
 
-[example](https://github.com/jfrz38/cocommit/blob/main/docs/assets/example.mp4)
+https://github.com/user-attachments/assets/9e13ccbe-829c-40aa-ae48-235c0f308662
 
 ## Why cocommit?
 
