@@ -9,7 +9,7 @@ use std::{
     },
 };
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use crossterm::{
     cursor::{Hide, Show},
     event::{DisableBracketedPaste, EnableBracketedPaste, read},
@@ -27,19 +27,14 @@ use signal_hook::{
 use std::sync::OnceLock;
 
 use crate::{
-    app::{App, AppAction},
-    commit::CommitDraft,
+    app::{App, AppAction, SubmissionIntent},
     event, ui,
 };
 
 /// The result returned by the interactive form after terminal restoration.
 pub enum TerminalResult {
     Cancelled,
-    Submitted {
-        draft: CommitDraft,
-        sign: bool,
-        excluded_files: Vec<crate::git::StagedFile>,
-    },
+    Submitted(SubmissionIntent),
 }
 
 static TERMINAL_STATE_ACTIVE: AtomicBool = AtomicBool::new(false);
@@ -114,16 +109,7 @@ impl TerminalSession {
             match app.handle(event) {
                 AppAction::Continue => {}
                 AppAction::Cancel => return Ok(TerminalResult::Cancelled),
-                AppAction::Submit => {
-                    let draft = app
-                        .draft()
-                        .map_err(|_| anyhow!("submitted an invalid draft"))?;
-                    return Ok(TerminalResult::Submitted {
-                        draft,
-                        sign: app.sign,
-                        excluded_files: app.excluded_staged_files(),
-                    });
-                }
+                AppAction::Submit(intent) => return Ok(TerminalResult::Submitted(intent)),
             }
         }
     }
@@ -195,7 +181,7 @@ fn install_unix_signal_handlers() -> Result<()> {
     });
     installation
         .as_ref()
-        .map_err(|error| anyhow!(error.clone()))
+        .map_err(|error| anyhow::anyhow!(error.clone()))
         .copied()
 }
 

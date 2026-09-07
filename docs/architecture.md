@@ -1,157 +1,37 @@
 # Architecture
 
-## Design
-
-The application is a synchronous Rust binary. Its behavior is small enough that async runtimes, dependency injection, generic repositories, and domain layers would add cost without solving a concrete problem.
-
-The Conventional Commit model is pure Rust and independent of Ratatui. UI code owns editing and rendering; Git code owns explicit Git commands.
-
-## Current structure
+`cocommit` is one Rust crate with explicit module boundaries rather than a
+multi-crate framework.
 
 ```text
-Cargo.toml
-Cargo.lock
-rust-toolchain.toml
-Makefile
-.github/
-  scripts/
-  workflows/
-src/
-  app.rs
-  cli.rs
-  commit.rs
-  config.rs
-  event.rs
-  git.rs
-  lib.rs
-  main.rs
-  terminal.rs
-  ui.rs
-tests/
-  cli.rs
-  git_integration.rs
-  terminal_pty.rs
-docs/
-  decisions/
-  *.md
-```
-
-`lib.rs` exposes the production modules to the binary and black-box integration tests. Unit tests can live beside their modules. The integration test is separate because it executes a real temporary Git repository.
-
-## Development tooling
-
-`rust-toolchain.toml` fixes development and CI to Rust 1.94.1 with the `clippy` and `rustfmt` components. `Makefile` is the local quality interface: `make check` runs formatting, linting, tests, and a build against `Cargo.lock`.
-
-The `Makefile` defines reusable quality commands. `.github/workflows/ci.yml` uses `make check`, `make check-portability`, and `make check-workflows` on Ubuntu. Windows and macOS mirror `make check-portability` with direct Cargo commands because GNU Make is not guaranteed on Windows runners. CI bootstraps actionlint and ShellCheck, while their invocation remains in the Makefile. Each runner verifies Git before tests execute.
-
-## Module responsibilities
-
-| Module | Responsibility |
-|---|---|
-| `main.rs` | Orchestrates preflight, config loading, terminal lifecycle, TUI results, index operations, and final Git execution. |
-| `cli.rs` | Parses the small command-line contract and provides usage text without terminal or Git dependencies. |
-| `commit.rs` | Defines the complete commit draft, canonical rendering, and validation. Has no terminal or Git dependency. |
-| `config.rs` | Defines layered global UI preferences, including optional-section visibility, and repository message policy; resolves paths, parses versioned TOML, and merges configuration. |
-| `git.rs` | Runs explicit Git commands, interprets exit statuses, constructs `git commit` and literal unstage arguments, and reads the staged index. |
-| `app.rs` | Holds editable form state, staged-file inclusion choices, focus, popup state, feedback, and pure state transitions; focus and staged inclusion are conditional on visible sections. |
-| `event.rs` | Maps Crossterm events to small application actions. |
-| `ui.rs` | Renders the form, preview, type picker, status, and footer from `App`. |
-| `terminal.rs` | Owns raw mode, alternate screen, cursor restoration, panic and Unix-signal cleanup, and the synchronous event loop boundary. |
-
-Dependencies point inward:
-
-```text
-main -> cli, config, git, terminal, app, event, ui
-app -> commit, config
+main -> cli, config, git, app, terminal, commit_workflow
+config -> commit::policy
+config -> settings
 event -> app
+terminal -> app, event, ui
 ui -> app, commit
-git -> std::process
+app -> commit, settings, staging
+git -> staging
+commit_workflow -> git, staging
 ```
 
-## Core domain model
+## Modules
 
-```rust
-pub struct CommitDraft {
-    pub commit_type: String,
-    pub scope: Option<String>,
-    pub breaking: bool,
-    pub message: String,
-    pub issue: Option<u64>,
-    pub body: Option<String>,
-    pub footers: Vec<Footer>,
-}
-```
+- `commit`: Conventional Commit draft, validation, rendering, and message policy.
+- `app`: keyboard-driven composer state and interaction rules.
+- `cli`: command-line parsing and usage text.
+- `event`: Crossterm-to-application event mapping.
+- `staging`: staged-change snapshot used by the application and UI.
+- `settings`: UI settings shared by configuration and the application.
+- `config`: TOML loading and merge logic that produces UI preferences and commit policy.
+- `git`: explicit Git CLI commands, preflight checks, and index updates.
+- `commit_workflow`: temporarily excludes selected staged files, commits the rest, and restores exclusions after a failed commit.
+- `ui` and `terminal`: Ratatui rendering and Crossterm lifecycle respectively.
 
-Signing is deliberately not part of `CommitDraft`: it changes the Git command, not the Conventional Commit message. The binary UI choice always maps to either `-S` or `--no-gpg-sign`.
+The commit domain does not depend on terminal, filesystem, or Git code. Git is
+invoked with explicit arguments rather than through a shell, so hooks, signing,
+credentials, and native Git output remain Git's responsibility.
 
-```rust
-impl CommitDraft {
-    pub fn render_message(&self) -> String;
-    pub fn validate(&self) -> Result<(), Vec<ValidationError>>;
-    pub fn validated_message(&self) -> Result<String, Vec<ValidationError>>;
-}
-```
-
-`Footer` holds an ordered trailer token and value. `render_message` is the sole formatter for header, optional body, and ordered footers; `validated_message` validates first and then delegates to it, preventing duplicate formatting logic. Iteration 15 establishes this model while Iteration 16 adds its editors to the TUI.
-
-`ValidationError` identifies its relevant form field so the UI can focus it after a failed submission.
-
-## Application state
-
-```rust
-pub struct App {
-    pub form: FormState,
-    pub focus: Focus,
-    pub mode: Mode,
-    pub sign: bool,
-    pub validation_error: Option<ValidationError>,
-}
-
-pub enum Focus {
-    CommitType,
-    Scope,
-    Breaking,
-    Message,
-    Body,
-    Footers,
-    Issue,
-    Sign,
-    StagedChanges,
-    Preview,
-    Submit,
-}
-
-pub enum Mode {
-    Form,
-    TypePicker(TypePickerState),
-    FooterNamePicker(FooterNamePickerState),
-    FooterEditor(FooterEditorState),
-    PreviewExpanded,
-    Help(Box<Mode>),
-}
-
-pub enum AppAction {
-    Continue,
-    Cancel,
-    Submit,
-}
-```
-
-`FormState` contains the editable header widgets, multiline body, and ordered `Footer` values, then converts them into `CommitDraft`. The footer modal is UI state only; preview and submission still use the domain renderer. `main` passes effective global UI preferences to `App`, which derives its navigable focus candidates from visible sections. A hidden optional section is initialized absent and cannot remain focused or expose an action; staged inclusion state exists only while Staged changes is visible.
-
-## Main flow
-
-```text
-parse CLI -> verify interactive streams -> preflight Git -> load config -> initialize terminal -> run UI loop
-    -> cancel: restore terminal and exit successfully
-    -> submit with exclusions: restore terminal -> Git unstage excluded files -> Git commit
-    -> submit: validate -> restore terminal -> git commit -> exit with Git status
-```
-
-The terminal is restored before invoking Git. This is essential for hooks, signing prompts, pinentry, and normal Git output.
-
-Before loading repository configuration, `main` asks Git for the work-tree root. `config` merges built-in defaults, global preferences, and the root `.cocommit.toml` policy without depending on terminal rendering or message formatting. Global section visibility is passed to `App`; repository policy cannot alter it. App preview and submission pass the effective policy to the domain model, which provides the single validation and formatting path.
-
-Help and version exit before the interactive-stream and Git checks. Usage errors exit before terminal initialization. The executable maps usage errors to exit code `2`, while operational failures use `1` and successful cancellation uses `0`.
-
-Terminal restoration is global and idempotent while raw mode is active. This lets normal cleanup, partial initialization errors, the panic hook, and supported Unix termination signals use the same recovery routine without hiding a panic's original report.
+Keep new behavior in the smallest module that owns it. Do not add traits,
+dependency injection, or separate crates unless a second real implementation
+needs them.

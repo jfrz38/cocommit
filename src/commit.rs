@@ -1,6 +1,10 @@
 //! Conventional Commit domain model and validation.
 
-use crate::config::{Capitalization, IssuePolicy, IssueStyle, MessagePolicy, TerminalPunctuation};
+pub mod policy;
+
+pub use policy::{
+    Capitalization, IssuePolicy, IssueStyle, MessagePolicy, SubjectPolicy, TerminalPunctuation,
+};
 
 /// A normalized Conventional Commit message ready to render or submit.
 #[derive(Debug, Clone, PartialEq, Eq)]

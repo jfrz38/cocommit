@@ -5,129 +5,12 @@ use std::{
     fmt::Write,
     io,
     path::{Path, PathBuf},
-    process::{Command, Output},
+    process::{Command, Output, Stdio},
 };
 
 use anyhow::{Context, Result, anyhow, bail};
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct StagedChanges {
-    pub files: Vec<StagedFile>,
-    pub insertions: u64,
-    pub deletions: u64,
-    pub binary_files: usize,
-}
-
-impl StagedChanges {
-    pub fn status_summary(&self) -> String {
-        let additions = self
-            .files
-            .iter()
-            .filter(|file| file.kind.is_added())
-            .count();
-        let modifications = self
-            .files
-            .iter()
-            .filter(|file| file.kind.is_modified())
-            .count();
-        let deletions = self
-            .files
-            .iter()
-            .filter(|file| file.kind.is_deleted())
-            .count();
-        let renames = self
-            .files
-            .iter()
-            .filter(|file| file.kind.is_renamed())
-            .count();
-        format!("A:{additions} M:{modifications} D:{deletions} R:{renames}")
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StagedFile {
-    pub kind: StagedChangeKind,
-    pub path: String,
-    pub previous_path: Option<String>,
-    git_paths: Vec<OsString>,
-}
-
-impl StagedFile {
-    pub fn for_display(
-        kind: StagedChangeKind,
-        path: impl Into<String>,
-        previous_path: Option<String>,
-    ) -> Self {
-        let path = path.into();
-        let mut git_paths = previous_path
-            .as_ref()
-            .map(|previous_path| vec![OsString::from(previous_path)])
-            .unwrap_or_default();
-        git_paths.push(OsString::from(&path));
-        Self {
-            kind,
-            path,
-            previous_path,
-            git_paths,
-        }
-    }
-
-    pub fn label(&self) -> String {
-        match &self.previous_path {
-            Some(previous_path) => {
-                format!("{} {previous_path} -> {}", self.kind.label(), self.path)
-            }
-            None => format!("{} {}", self.kind.label(), self.path),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StagedChangeKind {
-    Added,
-    Modified,
-    Deleted,
-    Renamed,
-    Other(String),
-}
-
-impl StagedChangeKind {
-    fn from_status(status: &str) -> Self {
-        match status.as_bytes().first() {
-            Some(b'A') => Self::Added,
-            Some(b'M') => Self::Modified,
-            Some(b'D') => Self::Deleted,
-            Some(b'R') => Self::Renamed,
-            _ => Self::Other(status.to_owned()),
-        }
-    }
-
-    fn label(&self) -> &str {
-        match self {
-            Self::Added => "A",
-            Self::Modified => "M",
-            Self::Deleted => "D",
-            Self::Renamed => "R",
-            Self::Other(status) => status,
-        }
-    }
-
-    fn is_added(&self) -> bool {
-        matches!(self, Self::Added)
-    }
-
-    fn is_modified(&self) -> bool {
-        matches!(self, Self::Modified)
-    }
-
-    fn is_deleted(&self) -> bool {
-        matches!(self, Self::Deleted)
-    }
-
-    fn is_renamed(&self) -> bool {
-        matches!(self, Self::Renamed)
-    }
-}
+pub use crate::staging::{StagedChangeKind, StagedChanges, StagedFile};
 
 /// Verifies that Git is available, the current directory is a work tree, and
 /// the index contains staged changes.
@@ -246,6 +129,56 @@ pub fn unstage(working_directory: &Path, files: &[StagedFile]) -> Result<()> {
     Ok(())
 }
 
+/// Captures the exact indexed changes for files that may later be restored.
+pub(crate) fn staged_patch(working_directory: &Path, files: &[StagedFile]) -> Result<Vec<u8>> {
+    let output = Command::new("git")
+        .current_dir(working_directory)
+        .args([
+            "--literal-pathspecs",
+            "diff",
+            "--cached",
+            "--binary",
+            "--no-renames",
+            "--",
+        ])
+        .args(files.iter().flat_map(|file| file.pathspecs().iter()))
+        .output()
+        .map_err(|error| git_start_error("git diff --cached --binary", error))?;
+    if !output.status.success() {
+        return Err(git_failure("git diff --cached --binary", &output));
+    }
+
+    Ok(output.stdout)
+}
+
+/// Restores a patch previously captured from the index without touching the working tree.
+pub(crate) fn restore_staged_patch(working_directory: &Path, patch: &[u8]) -> Result<()> {
+    let mut child = Command::new("git")
+        .current_dir(working_directory)
+        .args(["apply", "--cached", "--whitespace=nowarn"])
+        .stdin(Stdio::piped())
+        .spawn()
+        .map_err(|error| git_start_error("git apply --cached", error))?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .context("git apply --cached did not provide standard input")?;
+    use std::io::Write;
+    stdin
+        .write_all(patch)
+        .context("failed to provide the staged patch to git apply --cached")?;
+    drop(stdin);
+
+    let status = child
+        .wait()
+        .map_err(|error| git_start_error("git apply --cached", error))?;
+    if status.success() {
+        Ok(())
+    } else {
+        anyhow::bail!("git apply --cached failed with status {status}")
+    }
+}
+
 fn git_start_error(command: &str, error: io::Error) -> anyhow::Error {
     if error.kind() == io::ErrorKind::NotFound {
         anyhow!(
@@ -305,7 +238,11 @@ fn unstage_arguments(files: &[StagedFile], has_head: bool) -> Vec<OsString> {
         ]
     };
     arguments.push(OsString::from("--"));
-    arguments.extend(files.iter().flat_map(|file| file.git_paths.iter().cloned()));
+    arguments.extend(
+        files
+            .iter()
+            .flat_map(|file| file.pathspecs().iter().cloned()),
+    );
     arguments
 }
 
@@ -335,28 +272,29 @@ fn parse_name_status(output: &[u8]) -> Result<Vec<StagedFile>> {
         let first_path = fields
             .next()
             .context("Git returned a staged change without a path")?;
-        let (previous_path, path, git_paths) = if matches!(kind, StagedChangeKind::Renamed) {
-            let path = fields
-                .next()
-                .context("Git returned a staged rename without a destination path")?;
-            (
-                Some(display_path(first_path)),
-                display_path(path),
-                vec![path_from_git(first_path), path_from_git(path)],
-            )
-        } else {
-            (
-                None,
-                display_path(first_path),
-                vec![path_from_git(first_path)],
-            )
-        };
-        files.push(StagedFile {
+        let (previous_display_path, display_path, pathspecs) =
+            if matches!(kind, StagedChangeKind::Renamed) {
+                let path = fields
+                    .next()
+                    .context("Git returned a staged rename without a destination path")?;
+                (
+                    Some(display_path(first_path)),
+                    display_path(path),
+                    vec![path_from_git(first_path), path_from_git(path)],
+                )
+            } else {
+                (
+                    None,
+                    display_path(first_path),
+                    vec![path_from_git(first_path)],
+                )
+            };
+        files.push(StagedFile::from_git_paths(
             kind,
-            path,
-            previous_path,
-            git_paths,
-        });
+            display_path,
+            previous_display_path,
+            pathspecs,
+        ));
     }
 
     Ok(files)

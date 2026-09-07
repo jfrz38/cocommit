@@ -3,12 +3,12 @@ set -euo pipefail
 
 files="$(cargo package --list --allow-dirty | tr '\\' '/')"
 
-required=(.cargo_vcs_info.json CHANGELOG.md CONTRIBUTING.md Cargo.lock Cargo.toml Cargo.toml.orig LICENSE README.md SECURITY.md src/lib.rs src/main.rs)
+required=(.cargo_vcs_info.json Cargo.lock Cargo.toml Cargo.toml.orig LICENSE README.md docs/configuration.md src/lib.rs src/main.rs)
 for file in "${required[@]}"; do
   grep -Fx -- "$file" <<<"$files" >/dev/null
 done
 
-if grep -Ev '^(\.cargo_vcs_info\.json|CHANGELOG.md|CONTRIBUTING.md|Cargo.lock|Cargo.toml|Cargo.toml.orig|LICENSE|README.md|SECURITY.md|docs/.+\.md|src/.+\.rs)$' <<<"$files"; then
+if grep -Ev '^(\.cargo_vcs_info\.json|Cargo.lock|Cargo.toml|Cargo.toml.orig|LICENSE|README.md|docs/configuration\.md|src/.+\.rs)$' <<<"$files"; then
   echo 'The Cargo package contains files outside the approved distribution set.' >&2
   exit 1
 fi

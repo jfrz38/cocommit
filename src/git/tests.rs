@@ -23,7 +23,7 @@ fn enables_signing_when_requested() {
 
 #[test]
 fn builds_literal_unstage_arguments_for_head_and_initial_repositories() {
-    let file = StagedFile::for_display(
+    let file = StagedFile::from_display_paths(
         StagedChangeKind::Renamed,
         "new name.txt",
         Some("old name.txt".to_owned()),
@@ -130,12 +130,27 @@ fn parses_nul_delimited_staged_statuses_without_splitting_paths() {
 
     assert_eq!(files.len(), 4);
     assert_eq!(files[0].kind, StagedChangeKind::Added);
-    assert_eq!(files[0].path, "added file.txt");
+    assert_eq!(files[0].display_path, "added file.txt");
     assert_eq!(files[1].kind, StagedChangeKind::Modified);
     assert_eq!(files[2].kind, StagedChangeKind::Deleted);
     assert_eq!(files[3].kind, StagedChangeKind::Renamed);
-    assert_eq!(files[3].previous_path.as_deref(), Some("old\\tname"));
-    assert_eq!(files[3].path, "new\\nname");
+    assert_eq!(
+        files[3].previous_display_path.as_deref(),
+        Some("old\\tname")
+    );
+    assert_eq!(files[3].display_path, "new\\nname");
+    assert_eq!(
+        unstage_arguments(&files[3..], true),
+        [
+            "--literal-pathspecs",
+            "restore",
+            "--staged",
+            "--",
+            "old\tname",
+            "new\nname",
+        ]
+        .map(OsString::from)
+    );
 }
 
 #[test]

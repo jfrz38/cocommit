@@ -43,7 +43,7 @@ cargo-deny-version: ## verify the installed cargo-deny version
 supply-chain-check: cargo-deny-version ## check dependency advisories, licenses, and sources
 	CARGO_HOME="$(CURDIR)/target/cargo-home" $(CARGO_DENY) check advisories licenses sources
 
-.PHONY: check check-portability check-workflows package-contents-check distribution-check release-check release-check-clean ci
+.PHONY: check check-portability check-workflows package-contents-check release-check release-check-clean ci
 check: fmt-check lint test build ## run all local quality checks
 
 check-portability: fmt-check lint test build-release ## run the cross-platform quality suite
@@ -55,17 +55,11 @@ check-workflows: ## validate GitHub Actions workflows and embedded shell
 package-contents-check: ## verify the files included in the crates.io package
 	bash .github/scripts/check-package-contents.sh
 
-distribution-check: package-contents-check ## verify distribution packaging scripts
-	bash -n .github/scripts/check-package-contents.sh
-	bash -n .github/scripts/package-distribution.sh
-	bash -n .github/scripts/verify-distribution-archive.sh
-	bash -n .github/scripts/verify-release-assets.sh
-
-release-check: check ## verify the package can be published
+release-check: check supply-chain-check ## verify the package can be published
 	$(CARGO) publish --dry-run --locked --allow-dirty
 	bash .github/scripts/check-package-contents.sh
 
-release-check-clean: check ## verify a clean checkout can be published
+release-check-clean: check supply-chain-check ## verify a clean checkout can be published
 	$(CARGO) publish --dry-run --locked
 	bash .github/scripts/check-package-contents.sh
 

@@ -1,9 +1,10 @@
 use std::fs;
 
 use super::{
-    Capitalization, Config, IssueStyle, TerminalPunctuation, UiSections, global_config_path,
-    load_from_paths, repository_config_path,
+    Capitalization, Config, IssueStyle, TerminalPunctuation, global_config_path, load_from_paths,
+    repository_config_path,
 };
+use crate::settings::UiSections;
 
 #[test]
 fn defaults_preserve_the_existing_signing_and_message_behavior() {
@@ -77,17 +78,6 @@ fn accepts_all_optional_sections_hidden_globally() {
             issue: false,
         }
     );
-}
-
-#[test]
-fn loads_legacy_global_signing_preference() {
-    let directory = tempfile::tempdir().expect("temporary directory should be created");
-    let global = directory.path().join("global.toml");
-    fs::write(&global, "sign = false").expect("global configuration should be written");
-
-    let config = load_from_paths(Some(&global), directory.path()).unwrap();
-
-    assert!(!config.ui.sign);
 }
 
 #[test]
@@ -210,12 +200,13 @@ fn rejects_ui_preferences_in_repository_configuration() {
 }
 
 #[test]
-fn rejects_invalid_schema_versions_and_mixed_legacy_configuration() {
+fn rejects_invalid_schema_versions_and_configuration_forms() {
     let directory = tempfile::tempdir().expect("temporary directory should be created");
     let global = directory.path().join("global.toml");
     for contents in [
         "schema_version = 0",
         "schema_version = 2",
+        "sign = false",
         "[message]\ntypes = [\"feat\"]",
         "schema_version = 1\nsign = false",
     ] {

@@ -16,10 +16,7 @@ on:
         description: Branch to bump and target with the pull request
         required: true
         default: develop
-        type: choice
-        options:
-          - develop
-          - main
+        type: string
 
 permissions:
   contents: write
@@ -52,5 +49,5 @@ jobs:
           github-token: ${{ github.token }}
           commit-message: 'chore: bump version to {new-version}'
           pr-title: 'chore: bump version to {new-version}'
-          pr-body: 'Bumps cocommit from {current-version} to {next-version} using a {bump} release bump. Before merge, finalize CHANGELOG.md and the release-note entry for this version.'
+          pr-body: 'Bumps cocommit from {current-version} to {next-version} using a {bump} release bump.'
           pre-commit-commands: cargo generate-lockfile

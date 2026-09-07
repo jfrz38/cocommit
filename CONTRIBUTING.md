@@ -21,9 +21,7 @@ change limited to its stated behavior; do not add general Git-client features.
   parsing or reimplement Git behavior.
 - Keep repository message policy separate from global UI preferences.
 - Add or update stable automated tests for behavior changes.
-- Update user and technical documentation with the behavior.
-- Record an ADR before a compatibility, security, configuration-format, or
-  product-boundary decision.
+- Update the README or configuration guide when the change affects them.
 
 Run the relevant checks before opening a pull request:
 
@@ -33,15 +31,12 @@ make check-workflows
 make supply-chain-check
 ```
 
-For release, packaging, or documentation changes, also run `make release-check`.
-Describe manual terminal checks, supported platform impact, and any deferred
-release-gate evidence in the pull request.
+For release or packaging changes, also run `make release-check`.
 
 ## Pull requests
 
-Keep pull requests reviewable, explain the user-visible effect, and link the
-relevant roadmap iteration or ADR. Do not commit credentials, local paths,
-release archives, crash dumps, or generated build output.
+Keep pull requests reviewable and explain the user-visible effect. Do not commit
+credentials, local paths, crash dumps, or generated build output.
 
-See [docs/README.md](docs/README.md) for the implementation contract and
+See [architecture](docs/architecture.md) for module boundaries and
 [SECURITY.md](SECURITY.md) for private vulnerability reports.

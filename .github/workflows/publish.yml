@@ -1,4 +1,4 @@
-name: Publish Package
+name: Publish to crates.io
 
 on:
   workflow_dispatch:
@@ -7,116 +7,77 @@ permissions:
   contents: read
 
 concurrency:
-  group: publish-cocommit
+  group: crates-publish
   cancel-in-progress: false
 
 jobs:
-  validate-package:
+  select-release:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
+    timeout-minutes: 10
     outputs:
-      version: ${{ steps.release.outputs.version }}
       tag: ${{ steps.release.outputs.tag }}
-      candidate_sha: ${{ steps.release.outputs.candidate_sha }}
-      package_sha256: ${{ steps.package.outputs.sha256 }}
+      version: ${{ steps.version-check.outputs.local-version }}
     steps:
-      - name: Verify workflow runs from main
-        run: test "$GITHUB_REF" = refs/heads/main
-      - name: Resolve latest release
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select and validate the latest stable release
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
           set -euo pipefail
-          tag="$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq 'add | [.[] | select(.draft | not) | select(.prerelease | not)] | sort_by(.created_at) | last | .tag_name // empty')"
-          if [ -z "$tag" ]; then
-            echo 'No stable GitHub Release is available to publish.' >&2
-            exit 1
-          fi
+          test "$GITHUB_REF" = "refs/heads/main"
+          tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"
           version="${tag#v}"
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          candidate_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq .object.sha)"
-          {
-            echo "tag=$tag"
-            echo "version=$version"
-            echo "candidate_sha=$candidate_sha"
-          } >> "$GITHUB_OUTPUT"
-      - name: Check out release verification contract
+          test "$tag" = "v$version"
+          git fetch --tags --force
+          git rev-parse "$tag^{commit}" >/dev/null
+          git merge-base --is-ancestor "$tag^{commit}" HEAD
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Check out selected release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.release.outputs.tag }}
-          fetch-depth: 1
           persist-credentials: false
-      - name: Download release assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.release.outputs.tag }}
-        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir release-assets
-      - name: Verify release assets and provenance
-        id: package
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.release.outputs.version }}
-          TAG: ${{ steps.release.outputs.tag }}
-          CANDIDATE_SHA: ${{ steps.release.outputs.candidate_sha }}
-        run: |
-          set -euo pipefail
-          package="release-assets/cocommit-$VERSION.crate"
-          bash .github/scripts/verify-release-assets.sh release-assets "$VERSION"
-          for asset in release-assets/*; do
-            gh attestation verify "$asset" --repo "$GITHUB_REPOSITORY" --source-digest "$CANDIDATE_SHA" --source-ref "$TAG"
-          done
-          echo "sha256=$(sha256sum "$package" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
-      - name: Check out immutable release tag
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check version can be published
+        id: version-check
+        uses: jfrz38/check-version-change@c087b716b54ed45079f2440924db036f636539b3 # v1.3.1
         with:
-          ref: ${{ steps.release.outputs.tag }}
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Verify tag is on main and package version matches
+          file-path: Cargo.toml
+          package-name: cocommit
+          compare-source: registry
+          registry: crates-io
+          fail-on-unchanged: true
+          fail-on-not-higher: true
+      - name: Verify selected tag matches package version
         env:
           TAG: ${{ steps.release.outputs.tag }}
-          VERSION: ${{ steps.release.outputs.version }}
-        run: |
-          git fetch origin main --tags
-          git merge-base --is-ancestor "$TAG" origin/main
-          test "$(sed -n 's/^version = "\([0-9][0-9.]*\)"$/\1/p' Cargo.toml | head -n 1)" = "$VERSION"
-      - name: Check version is not already published
-        env:
-          VERSION: ${{ steps.release.outputs.version }}
-        run: test "$(curl --silent --output /dev/null --write-out '%{http_code}' "https://crates.io/api/v1/crates/cocommit/$VERSION")" = 404
+          VERSION: ${{ steps.version-check.outputs.local-version }}
+        shell: bash
+        run: test "$TAG" = "v$VERSION"
 
   publish:
-    needs: validate-package
+    needs: select-release
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     environment: crates-publish
     permissions:
       contents: read
       id-token: write
     steps:
-      - name: Check out validated release tag
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.validate-package.outputs.tag }}
-          fetch-depth: 1
+          ref: ${{ needs.select-release.outputs.tag }}
           persist-credentials: false
-      - name: Set up validated Rust toolchain
-        uses: dtolnay/rust-toolchain@75be91dd2711b583df57c31d0873b4145c89f1d9 # v1.94.1
-      - name: Repackage and compare the validated release bytes
-        env:
-          VERSION: ${{ needs.validate-package.outputs.version }}
-          EXPECTED_SHA256: ${{ needs.validate-package.outputs.package_sha256 }}
-        run: |
-          cargo package --locked --no-verify
-          package="target/package/cocommit-$VERSION.crate"
-          test "$(sha256sum "$package" | awk '{print $1}')" = "$EXPECTED_SHA256"
+      - uses: dtolnay/rust-toolchain@75be91dd2711b583df57c31d0873b4145c89f1d9 # v1.94.1
+      - run: cargo install cargo-deny --version 0.20.2 --locked
+      - name: Validate tagged release candidate
+        run: make release-check-clean
       - name: Authenticate with crates.io
-        id: auth
+        id: crates-io-auth
         uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
-      - name: Publish validated package
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
-        run: cargo publish --locked --no-verify
+      - name: Publish cocommit
+        run: cargo publish --locked --token "${{ steps.crates-io-auth.outputs.token }}"

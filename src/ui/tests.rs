@@ -1,11 +1,31 @@
+use super::*;
+use crate::{
+    app::{AppEvent, Edit, Focus},
+    commit::{Capitalization, MessagePolicy, SubjectPolicy, TerminalPunctuation},
+    settings::UiSections,
+};
 use ratatui::{Terminal, backend::TestBackend};
 use tui_input::Input;
 
-use super::*;
-use crate::{
-    commit::Footer,
-    config::{Capitalization, MessagePolicy, SubjectPolicy, TerminalPunctuation, UiSections},
-};
+fn focus(app: &mut App, target: Focus) {
+    while app.focus() != target {
+        assert_eq!(app.handle(AppEvent::Tab), crate::app::AppAction::Continue);
+    }
+}
+
+fn enter_text(app: &mut App, target: Focus, value: impl Into<String>) {
+    focus(app, target);
+    app.handle(AppEvent::Paste(value.into()));
+}
+
+fn add_footer(app: &mut App, token: &str, value: &str) {
+    focus(app, Focus::Footers);
+    app.handle(AppEvent::Edit(Edit::Insert('a')));
+    app.handle(AppEvent::Paste(token.to_owned()));
+    app.handle(AppEvent::Enter);
+    app.handle(AppEvent::Paste(value.to_owned()));
+    app.handle(AppEvent::Submit);
+}
 
 fn draw(app: &App, width: u16, height: u16) {
     let _ = rendered(app, width, height);
@@ -37,7 +57,7 @@ fn renders_form_at_normal_terminal_size() {
 #[test]
 fn footer_hint_always_describes_space_as_toggle() {
     assert_eq!(
-        footer_hint(),
+        components::footer_hint(),
         "F1 Help  |  Up/Down Navigate  |  Space Toggle  |  Ctrl+Enter Commit  |  Esc Cancel"
     );
 }
@@ -68,6 +88,23 @@ fn hidden_sections_consume_no_space_or_expose_actions() {
             );
         }
     }
+}
+
+#[test]
+fn all_hidden_sections_use_compact_layout_at_expanded_cutoff() {
+    let mut app = App::new(false).with_sections(UiSections {
+        staged_changes: false,
+        body: false,
+        footers: false,
+        issue: false,
+    });
+    focus(&mut app, Focus::Submit);
+
+    let output = rendered(&app, 50, 24);
+
+    assert!(output.contains("Sign commit [ ]"));
+    assert!(output.contains("Preview    scroll 0"));
+    assert!(output.contains("[ Commit ]"));
 }
 
 #[test]
@@ -132,7 +169,7 @@ fn renders_staged_change_counts_and_a_scrolled_file_list() {
     app.set_staged_changes(crate::git::StagedChanges {
         files: (0..10)
             .map(|index| {
-                crate::git::StagedFile::for_display(
+                crate::git::StagedFile::from_display_paths(
                     crate::git::StagedChangeKind::Added,
                     format!("src/archivo-{index}.rs"),
                     None,
@@ -143,8 +180,10 @@ fn renders_staged_change_counts_and_a_scrolled_file_list() {
         deletions: 3,
         binary_files: 1,
     });
-    app.focus = Focus::StagedChanges;
-    app.staged_selected = 9;
+    focus(&mut app, Focus::StagedChanges);
+    for _ in 0..9 {
+        app.handle(AppEvent::Down);
+    }
 
     let output = rendered(&app, 100, 40);
     assert!(output.contains("Staged"));
@@ -158,13 +197,26 @@ fn renders_error_only_after_validation_fails() {
     let mut app = App::new(false);
     assert!(!rendered(&app, 100, 40).contains("Error"));
 
-    app.validation_error = Some(crate::commit::ValidationError {
-        field: crate::commit::DraftField::Message,
-        kind: crate::commit::ValidationErrorKind::Required,
-    });
+    app.handle(AppEvent::Submit);
     let output = rendered(&app, 100, 40);
     assert!(output.contains("Error"));
     assert!(output.contains("Message is required"));
+}
+
+#[test]
+fn renders_input_feedback_before_validation_feedback() {
+    let mut app = App::new(false);
+    app.handle(AppEvent::Submit);
+    enter_text(
+        &mut app,
+        Focus::Message,
+        "a".repeat(crate::app::MAX_MESSAGE_LENGTH),
+    );
+    app.handle(AppEvent::Edit(Edit::Insert('a')));
+
+    let output = rendered(&app, 100, 40);
+    assert!(output.contains("Field is too long"));
+    assert!(!output.contains("Message is required"));
 }
 
 #[test]
@@ -178,10 +230,21 @@ fn renders_subject_indicator_for_the_active_policy() {
         ..MessagePolicy::default()
     };
     let mut app = App::new(false).with_message_policy(&policy);
-    app.form.message = Input::new("add footer editor".to_owned());
+    enter_text(&mut app, Focus::Message, "add footer editor");
 
     let output = rendered(&app, 100, 40);
     assert!(output.contains("Subject 17/72; lowercase; no terminal punctuation"));
+}
+
+#[test]
+fn presentation_helpers_preserve_form_labels_and_picker_titles() {
+    assert_eq!(components::scope_label(false), "Scope");
+    assert_eq!(components::scope_label(true), "Scope (Enter suggestions)");
+    assert_eq!(components::type_picker_title(false), " Select commit type ");
+    assert_eq!(
+        components::type_picker_title(true),
+        " Allowed commit types "
+    );
 }
 
 #[test]
@@ -200,7 +263,7 @@ fn renders_resize_instruction_at_small_terminal_size() {
 #[test]
 fn renders_compact_layout_and_scrolls_to_the_focused_field() {
     let mut app = App::new(true);
-    app.focus = Focus::Submit;
+    focus(&mut app, Focus::Submit);
     draw(&app, 40, 12);
     draw(&app, 30, 8);
 }
@@ -210,12 +273,12 @@ fn renders_excluded_staged_file_with_an_empty_checkbox() {
     let mut app = App::new(false);
     app.set_staged_changes(crate::git::StagedChanges {
         files: vec![
-            crate::git::StagedFile::for_display(
+            crate::git::StagedFile::from_display_paths(
                 crate::git::StagedChangeKind::Added,
                 "src/main.rs",
                 None,
             ),
-            crate::git::StagedFile::for_display(
+            crate::git::StagedFile::from_display_paths(
                 crate::git::StagedChangeKind::Modified,
                 "src/ui.rs",
                 None,
@@ -223,7 +286,7 @@ fn renders_excluded_staged_file_with_an_empty_checkbox() {
         ],
         ..Default::default()
     });
-    app.focus = Focus::StagedChanges;
+    focus(&mut app, Focus::StagedChanges);
     app.handle(crate::app::AppEvent::Space);
 
     let output = rendered(&app, 100, 40);
@@ -245,7 +308,7 @@ fn keeps_preview_below_commit_in_a_tall_compact_terminal() {
 #[test]
 fn renders_staged_detail_at_the_compact_layout_boundary() {
     let mut app = App::new(false);
-    app.focus = Focus::StagedChanges;
+    focus(&mut app, Focus::StagedChanges);
     let output = rendered(&app, 50, 30);
 
     assert!(output.contains("Staged"));
@@ -269,14 +332,11 @@ fn renders_help_overlay_at_both_terminal_sizes() {
 #[test]
 fn renders_every_focus_with_long_unicode_input_and_error() {
     let mut app = App::new(false);
-    app.form.scope = Input::new("biblioteca-privada".repeat(5));
-    app.form.message = Input::new("Añade soporte Unicode ".repeat(5));
-    app.validation_error = Some(crate::commit::ValidationError {
-        field: crate::commit::DraftField::Message,
-        kind: crate::commit::ValidationErrorKind::Required,
-    });
+    enter_text(&mut app, Focus::Scope, "biblioteca-privada".repeat(5));
+    enter_text(&mut app, Focus::Message, "Añade soporte Unicode ".repeat(5));
+    app.handle(AppEvent::Submit);
 
-    for focus in [
+    for target in [
         Focus::CommitType,
         Focus::Scope,
         Focus::Breaking,
@@ -289,7 +349,7 @@ fn renders_every_focus_with_long_unicode_input_and_error() {
         Focus::Preview,
         Focus::Submit,
     ] {
-        app.focus = focus;
+        focus(&mut app, target);
         draw(&app, 100, 40);
     }
 }
@@ -297,8 +357,11 @@ fn renders_every_focus_with_long_unicode_input_and_error() {
 #[test]
 fn renders_maximum_length_unicode_input_without_overflowing_scroll_values() {
     let mut app = App::new(false);
-    app.form.message = Input::new("界".repeat(crate::app::MAX_MESSAGE_LENGTH));
-    app.focus = Focus::Message;
+    enter_text(
+        &mut app,
+        Focus::Message,
+        "界".repeat(crate::app::MAX_MESSAGE_LENGTH),
+    );
 
     draw(&app, 30, 8);
     draw(&app, 100, 40);
@@ -307,11 +370,11 @@ fn renders_maximum_length_unicode_input_without_overflowing_scroll_values() {
 #[test]
 fn renders_footer_editor_with_multiline_wide_unicode_content() {
     let mut app = App::new(false);
-    app.form.body = Input::new("Details\nfor ��� users".to_owned());
-    app.form.footers = (0..31)
-        .map(|index| Footer::new(format!("Refs-{index}"), "界\nvalue".to_owned()))
-        .collect();
-    app.focus = Focus::Footers;
+    enter_text(&mut app, Focus::Body, "Details\nfor ��� users");
+    for index in 0..31 {
+        add_footer(&mut app, &format!("Refs-{index}"), "界\nvalue");
+    }
+    focus(&mut app, Focus::Footers);
     app.handle(crate::app::AppEvent::Enter);
 
     let output = rendered(&app, 100, 40);
@@ -323,16 +386,15 @@ fn renders_footer_editor_with_multiline_wide_unicode_content() {
 #[test]
 fn multiline_cursor_moves_to_its_text_line_and_the_selected_footer_stays_visible() {
     let input = Input::new("first\n界界\nlast".to_owned());
-    let view = super::multiline_view(&input, Rect::new(0, 0, 10, 2));
+    let view = components::multiline_view(&input, Rect::new(0, 0, 10, 2));
     assert_eq!(view.row, 1);
     assert_eq!(view.column, 4);
 
     let mut app = App::new(false);
-    app.form.footers = (0..10)
-        .map(|index| Footer::new(format!("Refs-{index}"), format!("#{index}")))
-        .collect();
-    app.focus = Focus::Footers;
-    app.footer_selected = 9;
+    for index in 0..10 {
+        add_footer(&mut app, &format!("Refs-{index}"), &format!("#{index}"));
+    }
+    focus(&mut app, Focus::Footers);
     let output = rendered(&app, 100, 40);
     assert!(output.contains("Refs-9: #9"));
 }
@@ -340,31 +402,19 @@ fn multiline_cursor_moves_to_its_text_line_and_the_selected_footer_stays_visible
 #[test]
 fn compact_footer_summary_uses_zero_when_no_footer_is_selected() {
     let mut app = App::new(false);
-    app.focus = Focus::Footers;
+    focus(&mut app, Focus::Footers);
 
     let output = rendered(&app, 40, 12);
     assert!(output.contains("Footers    0/0"));
 }
 
 #[test]
-fn preview_viewport_clamps_scroll_and_counts_wide_wrapped_lines() {
-    let viewport = super::preview_viewport("header\n界界界界\nfooter", Rect::new(0, 0, 4, 2), 99);
-
-    assert_eq!(viewport.total_lines, 6);
-    assert_eq!(viewport.max_scroll, 4);
-    assert_eq!(viewport.scroll, 4);
-    assert_eq!(viewport.first_line, 5);
-    assert_eq!(viewport.last_line, 6);
-    assert!(viewport.has_hidden_content);
-}
-
-#[test]
 fn renders_an_adaptive_preview_and_the_expanded_view() {
     let mut app = App::new(false);
-    app.form.message = Input::new("add endpoint".to_owned());
-    app.form.body = Input::new("Details\n".repeat(20));
-    app.form.footers = vec![Footer::new("Closes".to_owned(), "#42".to_owned())];
-    app.focus = Focus::Preview;
+    enter_text(&mut app, Focus::Message, "add endpoint");
+    enter_text(&mut app, Focus::Body, "Details\n".repeat(20));
+    add_footer(&mut app, "Closes", "#42");
+    focus(&mut app, Focus::Preview);
 
     let panel = rendered(&app, 100, 60);
     assert!(panel.contains("Preview 1/"));
@@ -374,9 +424,4 @@ fn renders_an_adaptive_preview_and_the_expanded_view() {
     let expanded = rendered(&app, 100, 40);
     assert!(expanded.contains("Home/End start/end"));
     assert!(expanded.contains("Closes: #42"));
-}
-
-#[test]
-fn clamps_scroll_values_that_exceed_the_terminal_coordinate_range() {
-    assert_eq!(super::clamp_scroll(usize::MAX), u16::MAX);
 }
