@@ -13,8 +13,10 @@ grep -A8 '^  supply-chain:$' .github/workflows/ci.yml | grep -q 'contents: read'
 grep -A8 '^  publish:$' .github/workflows/publish.yml | grep -q 'environment: crates-publish'
 grep -q 'check advisories licenses sources' Makefile
 grep -q 'cargo install cargo-deny --version 0.20.2 --locked' .github/workflows/release.yml
-grep -q 'jfrz38/check-version-change@c087b716b54ed45079f2440924db036f636539b3 # v1.3.1' .github/workflows/release.yml
-grep -q 'jfrz38/check-version-change@c087b716b54ed45079f2440924db036f636539b3 # v1.3.1' .github/workflows/publish.yml
+release_version_action="$(sed -n 's/^[[:space:]]*uses: \(jfrz38\/check-version-change@[^[:space:]]*\).*$/\1/p' .github/workflows/release.yml)"
+publish_version_action="$(sed -n 's/^[[:space:]]*uses: \(jfrz38\/check-version-change@[^[:space:]]*\).*$/\1/p' .github/workflows/publish.yml)"
+test -n "$release_version_action"
+test "$release_version_action" = "$publish_version_action"
 grep -q 'compare-ref: HEAD\^' .github/workflows/release.yml
 grep -q "steps.version-change.outputs.changed == 'true'" .github/workflows/release.yml
 grep -q 'compare-source: registry' .github/workflows/publish.yml
