@@ -15,12 +15,5 @@ fix is available.
 
 ## Supported versions
 
-Until the first public release, only the current `develop` branch is supported.
-After `0.1.0`, support and end-of-life status will be recorded in
-[CHANGELOG.md](CHANGELOG.md).
-
-## Maintainer setup
-
-Before making the repository public, enable private vulnerability reporting in
-the repository Security settings and verify that a non-maintainer can submit a
-private report.
+The latest stable release is supported. Support and end-of-life status are
+recorded in [CHANGELOG.md](CHANGELOG.md).

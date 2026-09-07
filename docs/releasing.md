@@ -1,139 +1,67 @@
 # Releasing cocommit
 
-> **Pre-release policy:** `cocommit` must not create a tag, GitHub Release, or crates.io package until Iterations 10 through 23 and the `0.1.0` release gate in the [roadmap](roadmap.md) are complete. The workflows below are hardened for the approved automatic GitHub Release flow, but must be rehearsed privately before their first use.
+`cocommit` publishes one Rust crate. GitHub Releases contain generated notes
+only; there are no prebuilt binaries, archives, checksums, or installers.
 
-`cocommit` uses three separate GitHub Actions workflows so each release boundary is explicit:
+## Prerequisites
 
-1. **Bump Version** creates a draft version-bump pull request.
-2. **Create Release** validates a push to `main` and creates the matching GitHub Release when the version is new.
-3. **Publish Package** is run manually from `main` and publishes the latest GitHub Release to crates.io.
+- The release candidate has been reviewed and merged into `develop`.
+- `make check` and `make release-check-clean` pass from a clean checkout.
+- The repository is public so crates.io visitors can access its source, issue
+  tracker, and README links.
+- Repository Actions may create pull requests, and the `crates-publish` GitHub
+  Environment exists with the required reviewer protection.
+- After the first publication, crates.io Trusted Publishing is configured for
+  this repository's `publish.yml` workflow and the `crates-publish` Environment.
 
-The package version in `Cargo.toml`, its `v<version>` tag, its GitHub Release, and the crates.io version must all match.
+## Release flow
 
-Before merging a version bump, move reviewed user-visible changes from
-`Unreleased` to the versioned entry in [CHANGELOG.md](../CHANGELOG.md). That
-entry is the source for the GitHub Release notes; generated notes may supplement
-it but must not replace the reviewed changelog.
+1. Run **Bump Version** from the Actions tab and choose `patch`, `minor`, or
+   `major`. It creates a draft pull request against `develop` and regenerates
+   `Cargo.lock`.
+2. Finalize the matching dated entry in `CHANGELOG.md`, then review and merge
+   the bump pull request into `develop`.
+3. Merge a pull request from `develop` into `main`. Do not fast-forward `main`:
+   the release workflow compares the candidate with its preceding `main` commit.
+4. The **Release** workflow runs quality and package checks. On a push to
+   `main`, `jfrz38/check-version-change` creates `v<version>` and a GitHub
+   Release with generated notes only when `Cargo.toml` contains a changed,
+   higher stable version. A manual **Release** dispatch validates only; it never
+   creates a tag or release.
+5. Run **Publish to crates.io** manually from `main`. It selects the latest
+   stable GitHub Release, verifies its tag is an ancestor of `main`, uses
+   `jfrz38/check-version-change` to ensure the version is unpublished and newer
+   than crates.io's latest version, validates the tagged package, and publishes
+   through the protected `crates-publish` Environment.
 
-## Prepare a version
+Never move, delete, or reuse a release tag. A release retry accepts an existing
+tag only when it resolves to the current `main` commit.
 
-In GitHub Actions, run **Bump Version** and select `patch`, `minor`, or `major`. Its default base branch is `develop`. The workflow opens a draft pull request named `chore/bump-version-<version>` and updates both `Cargo.toml` and `Cargo.lock`.
+## Initial publication
 
-Review and merge that pull request into `develop`, then merge `develop` into `main`. Do not edit the version directly on `main`.
+crates.io Trusted Publishing can only be configured after the crate exists. Once
+`v0.1.0` has been created on `main`, publish it once from that immutable tag with
+a temporary, publish-only crates.io token:
 
-The repository must allow GitHub Actions to create pull requests at **Settings > Actions > General > Workflow permissions**. Enable **Allow GitHub Actions to create and approve pull requests**.
-
-## Create the GitHub Release
-
-Every push to `main` runs **Create Release**. An unprivileged job checks out the exact pushed commit, requires a clean worktree, runs `make release-check-clean`, checks the Cargo package contents, and uses `check-version-change` to compare the `Cargo.toml` version with the preceding commit. It produces the `.crate` and CycloneDX JSON SBOM once from that checkout.
-
-Independent read-only runners build native binaries for Linux x86_64 GNU, Windows x86_64 MSVC, and macOS Apple Silicon from that candidate SHA. A separate job produces normalized archives, checksums, and their exact asset set. Each target's native runner extracts and executes the resulting archive before the separate `contents: write` job can create `v<version>`, generate GitHub release notes, and attach those exact assets. A final isolated job attests the same files with GitHub build provenance.
-
-The tag is immutable. Existing tags must point to the exact candidate SHA, and existing assets must match byte-for-byte; a rerun uploads only missing assets and fails on a conflict. It never moves a tag or silently overwrites an asset.
-
-The workflow does not publish to crates.io.
-
-## Rehearse the release validation
-
-Run **Create Release** manually from the commit or branch to validate. Manual dispatch executes only the unprivileged validation, build, packaging, and archive-verification jobs; it cannot create a tag or GitHub Release. Confirm in the Actions UI that `create-release` and `attest-assets` are skipped and that the validation log reports the expected SHA and version.
-
-Run the normal `main` path only after recording the rehearsal evidence. Before its first use, use a private test version or repository to verify first creation, repeated execution, later merges with the same version, tag-only recovery, and conflicting-state failures.
-
-## Publish to crates.io
-
-After reviewing the GitHub Release, open **Publish Package** in GitHub Actions and run it from `main`. Its unprivileged validation job selects the latest published stable release, excluding drafts and prereleases, then:
-
-1. Resolves the latest GitHub Release.
-2. Checks out its immutable tag.
-3. Verifies that the tag is reachable from `main` and that the tag version matches `Cargo.toml`.
-4. Verifies the version is not already present on crates.io.
-5. Downloads every release asset; verifies the exact asset set, SHA-256,
-   CycloneDX format, archive layouts, and GitHub provenance for the candidate SHA.
-
-The separate publication job is gated by the `crates-publish` Environment. It checks out that exact tag, repackages without package verification, requires the checksum to match the downloaded release package, and then publishes with a temporary crates.io token obtained through GitHub OIDC. It fails if Cargo's required reconstruction differs from the validated release bytes.
-
-The workflow never publishes the mutable `main` checkout and does not use a long-lived registry token. Only its publication job has `id-token: write`.
-
-## Trusted Publishing setup
-
-crates.io Trusted Publishing can only be configured after the crate's initial publication. Once `cocommit` exists on crates.io, an owner must configure it at **crates.io > cocommit > Settings > Trusted Publishing** with:
-
-| Setting | Value |
-|---|---|
-| CI/CD platform | GitHub Actions |
-| Repository owner | `jfrz38` |
-| Repository name | `cocommit` |
-| Workflow filename | `publish.yml` |
-| Environment | `crates-publish` |
-
-The `publish.yml` workflow requests `id-token: write`; `rust-lang/crates-io-auth-action` exchanges that identity for a short-lived token and revokes it when the job finishes.
-
-## Initial 0.1.0 publication
-
-The first publication cannot use Trusted Publishing. After `v0.1.0` is created:
-
-1. Run `make release-check` on the release commit.
-2. Create a crates.io API token scoped only to publish new crates.
-3. Run `cargo publish --locked --token <token>` from that release commit.
-4. Revoke the token immediately after a successful publication.
-5. Configure Trusted Publishing as described above.
-
-The GitHub Release is still created automatically; only this initial registry publication is manual. Future versions use **Publish Package** and require no stored crates.io secret.
-
-## Local release validation
-
-Before merging a release bump, run:
-
-```bash
-make release-check
-```
-
-This runs formatting, Clippy, tests, a build, and `cargo publish --dry-run --locked --allow-dirty`. It packages and validates the crate but never uploads it. `--allow-dirty` lets maintainers validate a release bump before its pull request is committed.
-
-Use the clean CI-equivalent validation for a committed candidate:
-
-```bash
+```sh
+git fetch --tags origin
+git switch --detach v0.1.0
 make release-check-clean
+cargo publish --locked --token "$CARGO_REGISTRY_TOKEN"
 ```
 
-## Verify release assets
+Revoke the token after publication. Then configure crates.io **Trusted
+Publishing** for GitHub repository `jfrz38/cocommit`, workflow
+`.github/workflows/publish.yml`, and environment `crates-publish`. The workflow
+requests an OIDC token only in its protected publishing job.
 
-Download all release assets for the selected version, then verify them before
-installing or publishing:
+## Recovery
 
-```bash
-sha256sum -c cocommit-<version>-SHA256SUMS
-jq -e '.bomFormat == "CycloneDX"' cocommit-<version>.cdx.json
-for asset in cocommit-<version>-* cocommit-<version>.crate cocommit-<version>.cdx.json; do
-  gh attestation verify "$asset" \
-    --repo jfrz38/cocommit \
-    --source-ref v<version> \
-    --source-digest <candidate-sha>
-done
+Crates.io versions are immutable. If a published version must be withdrawn, yank
+it rather than changing its tag:
+
+```sh
+cargo yank --version 0.1.0 --token "$CARGO_REGISTRY_TOKEN"
 ```
 
-The checksums and attestations cover the package, SBOM, all native archives,
-and the checksum manifest. The attestation binds every asset to the Create
-Release workflow and candidate commit.
-
-## Native archives
-
-The release contains unsigned `.tar.gz` archives for Linux and macOS plus an
-unsigned `.zip` archive for Windows. Every archive contains the executable,
-`LICENSE`, and `INSTALL.md` under `cocommit-<version>-<target>/`. No release
-archive is currently provided for Linux ARM, Windows ARM, or other targets.
-
-Windows SmartScreen can identify `cocommit.exe` as coming from an unknown
-publisher. macOS Gatekeeper can require an explicit user decision before an
-unsigned, unnotarized binary runs. Verify checksums and the GitHub attestation
-first; users unwilling to accept those platform warnings should install the
-published package with `cargo install cocommit --locked` instead.
-
-Homebrew, Scoop, Winget, Authenticode, macOS Developer ID signing, and
-notarization are intentionally not part of `0.1.0`.
-
-## Approval and recovery
-
-Configure `crates-publish` outside this repository with required reviewers, self-review prevention where available, and deployment branches restricted to `main`. Configure a ruleset for `refs/tags/v*` that prevents normal maintainers from moving or deleting tags while allowing the minimal Create Release bypass to create a new tag. Rehearse both controls privately and retain screenshots.
-
-Before tag creation, fix validation failures on a new candidate and repeat the rehearsal. If asset upload or attestation fails after a release exists, rerun the workflow for the same immutable candidate; never use a later unchanged-version `main` commit. Before crates.io publication, cancel a pending run or delete a mistaken GitHub Release only after confirming the immutable tag must remain for auditability. Never move or reuse that tag. After crates.io accepts a package, use yanking where appropriate, mark the GitHub Release as withdrawn or superseded, and publish a corrected higher version. See [Supply-chain operations](supply-chain-operations.md) for the incident playbook and user verification commands.
+Publish a corrected, higher version through the normal bump and release flow.
