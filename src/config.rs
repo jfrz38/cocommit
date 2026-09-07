@@ -9,10 +9,12 @@ use std::{
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
+use crate::commit::{Capitalization, IssueStyle, MessagePolicy, TerminalPunctuation};
+
+#[doc(inline)]
+pub use crate::settings::UiSections;
+
 const SCHEMA_VERSION: u32 = 1;
-pub const DEFAULT_TYPES: [&str; 11] = [
-    "feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert",
-];
 
 /// The complete configuration after defaults, global, and repository layers merge.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -35,104 +37,6 @@ impl Default for UiPreferences {
             sections: UiSections::default(),
         }
     }
-}
-
-/// Optional composer sections controlled exclusively by global preferences.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct UiSections {
-    pub staged_changes: bool,
-    pub body: bool,
-    pub footers: bool,
-    pub issue: bool,
-}
-
-impl Default for UiSections {
-    fn default() -> Self {
-        Self {
-            staged_changes: true,
-            body: true,
-            footers: true,
-            issue: true,
-        }
-    }
-}
-
-/// Repository message conventions resolved from defaults and configuration layers.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MessagePolicy {
-    pub types: Vec<String>,
-    /// Whether `types` was explicitly configured and therefore restricts custom values.
-    pub types_are_restricted: bool,
-    pub scope_suggestions: Vec<String>,
-    pub subject: SubjectPolicy,
-    pub issue: IssuePolicy,
-}
-
-impl Default for MessagePolicy {
-    fn default() -> Self {
-        Self {
-            types: DEFAULT_TYPES.map(str::to_owned).to_vec(),
-            types_are_restricted: false,
-            scope_suggestions: Vec::new(),
-            subject: SubjectPolicy::default(),
-            issue: IssuePolicy::default(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SubjectPolicy {
-    pub max_length: Option<usize>,
-    pub capitalization: Capitalization,
-    pub terminal_punctuation: TerminalPunctuation,
-}
-
-impl Default for SubjectPolicy {
-    fn default() -> Self {
-        Self {
-            max_length: None,
-            capitalization: Capitalization::Allow,
-            terminal_punctuation: TerminalPunctuation::Allow,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Capitalization {
-    Allow,
-    Lowercase,
-    Uppercase,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum TerminalPunctuation {
-    Allow,
-    Forbid,
-    Require,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IssuePolicy {
-    pub prefix: String,
-    pub style: IssueStyle,
-}
-
-impl Default for IssuePolicy {
-    fn default() -> Self {
-        Self {
-            prefix: "#".to_owned(),
-            style: IssueStyle::Parenthesized,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum IssueStyle {
-    Parenthesized,
-    Plain,
 }
 
 #[derive(Debug, Deserialize, Default)]

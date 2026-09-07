@@ -1,7 +1,7 @@
 use std::{env, process::ExitCode};
 
 use anyhow::{Context, Result};
-use cocommit::{app, cli, config, git, terminal};
+use cocommit::{app, cli, commit_workflow::CommitWorkflow, config, git, terminal};
 
 const EXIT_FAILURE: u8 = 1;
 const EXIT_USAGE: u8 = 2;
@@ -42,18 +42,15 @@ fn run() -> Result<()> {
     app.set_staged_changes(staged_changes);
     match terminal::run(&mut app)? {
         terminal::TerminalResult::Cancelled => {}
-        terminal::TerminalResult::Submitted {
+        terminal::TerminalResult::Submitted(app::SubmissionIntent {
             draft,
             sign,
             excluded_files,
-        } => {
-            if !excluded_files.is_empty() {
-                git::unstage(&working_directory, &excluded_files)?;
-            }
-            git::commit(
-                &working_directory,
+        }) => {
+            CommitWorkflow::new(&working_directory).commit(
                 &draft.render_message_with_policy(&config.message),
                 sign,
+                &excluded_files,
             )?;
         }
     }

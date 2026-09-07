@@ -1,4 +1,4 @@
-use crate::config::{Capitalization, IssueStyle, MessagePolicy, TerminalPunctuation};
+use crate::commit::{Capitalization, IssueStyle, MessagePolicy, TerminalPunctuation};
 
 use super::{CommitDraft, DraftField, Footer, ValidationError, ValidationErrorKind};
 

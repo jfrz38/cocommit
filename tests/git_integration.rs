@@ -138,14 +138,19 @@ fn hidden_staged_section_commits_every_staged_file_without_unstaging() {
     fs::write(repository.path().join("two.txt"), "two\n").expect("second file should be written");
     run_git(repository.path(), ["add", "."]);
 
-    let mut app = cocommit::app::App::new(false).with_sections(cocommit::config::UiSections {
+    let mut app = cocommit::app::App::new(false).with_sections(cocommit::settings::UiSections {
         staged_changes: false,
         ..Default::default()
     });
     app.set_staged_changes(
         cocommit::git::preflight(repository.path()).expect("preflight should pass"),
     );
-    app.form.message = tui_input::Input::new("commit all staged files".to_owned());
+    for _ in 0..3 {
+        app.handle(cocommit::app::AppEvent::Tab);
+    }
+    app.handle(cocommit::app::AppEvent::Paste(
+        "commit all staged files".to_owned(),
+    ));
 
     assert!(app.excluded_staged_files().is_empty());
     let draft = app.draft().expect("draft should be valid");
@@ -281,12 +286,9 @@ fn staged_change_summary_matches_git_for_common_index_changes() {
     assert_eq!(summary.files.len(), 4);
     assert_eq!(summary.status_summary(), "A:1 M:1 D:1 R:1");
     assert_eq!((summary.insertions, summary.deletions), (2, 2));
-    assert!(
-        summary
-            .files
-            .iter()
-            .any(|file| file.path == "docs/usage-界.md" && file.previous_path.is_some())
-    );
+    assert!(summary.files.iter().any(|file| {
+        file.display_path == "docs/usage-界.md" && file.previous_display_path.is_some()
+    }));
 }
 
 #[test]
@@ -363,6 +365,153 @@ fn unstaging_an_initial_repository_file_keeps_it_in_the_working_tree() {
     );
 }
 
+#[test]
+fn failed_commit_restores_excluded_files_to_the_index_without_staging_new_worktree_edits() {
+    if !require_git() {
+        return;
+    }
+    let repository = tempdir().expect("temporary repository should be created");
+    run_git(repository.path(), ["init"]);
+    configure_identity(repository.path());
+    fs::write(repository.path().join("included.txt"), "before\n")
+        .expect("included baseline should be written");
+    fs::write(repository.path().join("excluded.txt"), "before\n")
+        .expect("excluded baseline should be written");
+    run_git(repository.path(), ["add", "."]);
+    run_git(repository.path(), ["commit", "-m", "chore: baseline"]);
+
+    fs::write(repository.path().join("included.txt"), "included staged\n")
+        .expect("included change should be written");
+    fs::write(repository.path().join("excluded.txt"), "excluded staged\n")
+        .expect("excluded change should be written");
+    run_git(repository.path(), ["add", "."]);
+    fs::write(
+        repository.path().join("excluded.txt"),
+        "excluded unstaged\n",
+    )
+    .expect("unstaged excluded change should be written");
+
+    let hooks_directory = repository.path().join("hooks");
+    fs::create_dir(&hooks_directory).expect("hooks directory should be created");
+    fs::write(hooks_directory.join("pre-commit"), "#!/bin/sh\nexit 1\n")
+        .expect("failing hook should be written");
+    run_git(
+        repository.path(),
+        [
+            "config",
+            "core.hooksPath",
+            hooks_directory
+                .to_str()
+                .expect("temporary path should be valid Unicode"),
+        ],
+    );
+
+    let excluded = cocommit::git::staged_changes(repository.path())
+        .expect("staged summary should be read")
+        .files
+        .into_iter()
+        .find(|file| file.display_path == "excluded.txt")
+        .expect("excluded file should be staged");
+    let error = cocommit::commit_workflow::CommitWorkflow::new(repository.path())
+        .commit("feat: restore excluded index entry", false, &[excluded])
+        .expect_err("the pre-commit hook should reject the commit");
+
+    assert!(
+        error
+            .to_string()
+            .contains("excluded paths were restored to the index")
+    );
+    assert_eq!(
+        git_output(repository.path(), ["show", ":excluded.txt"]),
+        "excluded staged\n"
+    );
+    assert!(
+        git_output(repository.path(), ["diff", "--cached", "--name-only"])
+            .lines()
+            .any(|path| path == "excluded.txt"),
+        "the excluded change should remain staged after restoration"
+    );
+    assert_eq!(
+        fs::read_to_string(repository.path().join("excluded.txt"))
+            .expect("excluded working-tree file should remain readable"),
+        "excluded unstaged\n"
+    );
+    assert_eq!(
+        git_output(repository.path(), ["show", ":included.txt"]),
+        "included staged\n"
+    );
+}
+
+#[test]
+fn failed_commit_restores_an_excluded_rename_without_changing_the_working_tree() {
+    if !require_git() {
+        return;
+    }
+    let repository = tempdir().expect("temporary repository should be created");
+    run_git(repository.path(), ["init"]);
+    configure_identity(repository.path());
+    fs::write(repository.path().join("included.txt"), "before\n")
+        .expect("included baseline should be written");
+    fs::write(repository.path().join("original.txt"), "before\n")
+        .expect("rename baseline should be written");
+    run_git(repository.path(), ["add", "."]);
+    run_git(repository.path(), ["commit", "-m", "chore: baseline"]);
+
+    fs::write(repository.path().join("included.txt"), "included staged\n")
+        .expect("included change should be written");
+    fs::rename(
+        repository.path().join("original.txt"),
+        repository.path().join("renamed.txt"),
+    )
+    .expect("rename should succeed");
+    run_git(repository.path(), ["add", "-A"]);
+    fs::write(repository.path().join("renamed.txt"), "renamed unstaged\n")
+        .expect("unstaged rename change should be written");
+
+    let hooks_directory = repository.path().join("hooks");
+    fs::create_dir(&hooks_directory).expect("hooks directory should be created");
+    fs::write(hooks_directory.join("pre-commit"), "#!/bin/sh\nexit 1\n")
+        .expect("failing hook should be written");
+    run_git(
+        repository.path(),
+        [
+            "config",
+            "core.hooksPath",
+            hooks_directory
+                .to_str()
+                .expect("temporary path should be valid Unicode"),
+        ],
+    );
+
+    let excluded = cocommit::git::staged_changes(repository.path())
+        .expect("staged summary should be read")
+        .files
+        .into_iter()
+        .find(|file| file.display_path == "renamed.txt")
+        .expect("renamed file should be staged");
+    cocommit::commit_workflow::CommitWorkflow::new(repository.path())
+        .commit("feat: restore excluded rename", false, &[excluded])
+        .expect_err("the pre-commit hook should reject the commit");
+
+    assert!(
+        git_output(
+            repository.path(),
+            ["diff", "--cached", "--name-status", "--find-renames"],
+        )
+        .contains("R100\toriginal.txt\trenamed.txt")
+    );
+    assert_eq!(
+        git_output(repository.path(), ["show", ":renamed.txt"]),
+        "before\n"
+    );
+    assert!(!repository.path().join("original.txt").exists());
+    assert_eq!(
+        fs::read_to_string(repository.path().join("renamed.txt"))
+            .expect("renamed working-tree file should remain readable"),
+        "renamed unstaged\n"
+    );
+}
+
 fn require_git() -> bool {
     let Ok(version) = Command::new("git").arg("--version").status() else {
         eprintln!("skipping Git integration test because git --version could not run");
@@ -390,6 +539,16 @@ where
         .status()
         .expect("Git command should run");
     assert!(status.success(), "Git command should succeed");
+}
+
+fn git_output<const N: usize>(repository: &Path, arguments: [&str; N]) -> String {
+    let output = Command::new("git")
+        .current_dir(repository)
+        .args(arguments)
+        .output()
+        .expect("Git command should run");
+    assert!(output.status.success(), "Git command should succeed");
+    String::from_utf8(output.stdout).expect("Git output should be UTF-8")
 }
 
 fn configure_identity(repository: &Path) {

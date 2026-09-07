@@ -1,9 +1,10 @@
 use std::fs;
 
 use super::{
-    Capitalization, Config, IssueStyle, TerminalPunctuation, UiSections, global_config_path,
-    load_from_paths, repository_config_path,
+    Capitalization, Config, IssueStyle, TerminalPunctuation, global_config_path, load_from_paths,
+    repository_config_path,
 };
+use crate::settings::UiSections;
 
 #[test]
 fn defaults_preserve_the_existing_signing_and_message_behavior() {
