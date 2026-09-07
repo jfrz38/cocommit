@@ -391,20 +391,7 @@ fn failed_commit_restores_excluded_files_to_the_index_without_staging_new_worktr
     )
     .expect("unstaged excluded change should be written");
 
-    let hooks_directory = repository.path().join("hooks");
-    fs::create_dir(&hooks_directory).expect("hooks directory should be created");
-    fs::write(hooks_directory.join("pre-commit"), "#!/bin/sh\nexit 1\n")
-        .expect("failing hook should be written");
-    run_git(
-        repository.path(),
-        [
-            "config",
-            "core.hooksPath",
-            hooks_directory
-                .to_str()
-                .expect("temporary path should be valid Unicode"),
-        ],
-    );
+    install_failing_pre_commit_hook(repository.path());
 
     let excluded = cocommit::git::staged_changes(repository.path())
         .expect("staged summary should be read")
@@ -468,20 +455,7 @@ fn failed_commit_restores_an_excluded_rename_without_changing_the_working_tree()
     fs::write(repository.path().join("renamed.txt"), "renamed unstaged\n")
         .expect("unstaged rename change should be written");
 
-    let hooks_directory = repository.path().join("hooks");
-    fs::create_dir(&hooks_directory).expect("hooks directory should be created");
-    fs::write(hooks_directory.join("pre-commit"), "#!/bin/sh\nexit 1\n")
-        .expect("failing hook should be written");
-    run_git(
-        repository.path(),
-        [
-            "config",
-            "core.hooksPath",
-            hooks_directory
-                .to_str()
-                .expect("temporary path should be valid Unicode"),
-        ],
-    );
+    install_failing_pre_commit_hook(repository.path());
 
     let excluded = cocommit::git::staged_changes(repository.path())
         .expect("staged summary should be read")
@@ -549,6 +523,33 @@ fn git_output<const N: usize>(repository: &Path, arguments: [&str; N]) -> String
         .expect("Git command should run");
     assert!(output.status.success(), "Git command should succeed");
     String::from_utf8(output.stdout).expect("Git output should be UTF-8")
+}
+
+fn install_failing_pre_commit_hook(repository: &Path) {
+    let hooks_directory = repository.join("hooks");
+    fs::create_dir(&hooks_directory).expect("hooks directory should be created");
+    let hook = hooks_directory.join("pre-commit");
+    fs::write(&hook, "#!/bin/sh\nexit 1\n").expect("failing hook should be written");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let mut permissions = fs::metadata(&hook)
+            .expect("failing hook metadata should be read")
+            .permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&hook, permissions).expect("failing hook should be executable");
+    }
+    run_git(
+        repository,
+        [
+            "config",
+            "core.hooksPath",
+            hooks_directory
+                .to_str()
+                .expect("temporary path should be valid Unicode"),
+        ],
+    );
 }
 
 fn configure_identity(repository: &Path) {
