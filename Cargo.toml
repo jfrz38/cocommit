@@ -13,12 +13,11 @@ include = [
   "Cargo.lock",
   "Cargo.toml",
   "CHANGELOG.md",
-  "CONTRIBUTING.md",
   "LICENSE",
   "README.md",
-  "SECURITY.md",
-  "docs/**/*.md",
+  "docs/configuration.md",
   "src/**/*.rs",
+  "!.cargo/**",
 ]
 
 [dependencies]
