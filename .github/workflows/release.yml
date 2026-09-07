@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@75be91dd2711b583df57c31d0873b4145c89f1d9 # v1.94.1
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-on-failure: true
+      - run: cargo install cargo-deny --version 0.20.2 --locked
+      - name: Run quality checks
+        run: make check
+      - name: Validate release package
+        run: make release-check-clean
+      - name: Read candidate version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version = "\([0-9][0-9.]*\)"$/\1/p' Cargo.toml | head -n 1)"
+          test -n "$version"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+      - name: Compare package version with previous commit
+        id: version-change
+        if: github.event_name == 'push'
+        uses: jfrz38/check-version-change@c087b716b54ed45079f2440924db036f636539b3 # v1.3.1
+        with:
+          file-path: Cargo.toml
+          compare-source: git-ref
+          compare-ref: HEAD^
+      - name: Reject a non-increasing version change
+        if: >-
+          github.event_name == 'push' &&
+          steps.version-change.outputs.changed == 'true' &&
+          steps.version-change.outputs.compared-version != '' &&
+          steps.version-change.outputs.is-higher != 'true'
+        run: |
+          echo "The candidate version must be greater than the previous main version." >&2
+          exit 1
+      - name: Create immutable tag and GitHub Release
+        if: >-
+          github.event_name == 'push' &&
+          steps.version-change.outputs.changed == 'true' &&
+          (steps.version-change.outputs.compared-version == '' ||
+          steps.version-change.outputs.is-higher == 'true')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.version.outputs.value }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_ref="$(git ls-remote origin "refs/tags/${TAG}" | awk '{print $1}')"
+          head_commit="$(git rev-parse HEAD)"
+          if [ -n "$tag_ref" ]; then
+            tag_commit="$(git ls-remote origin "refs/tags/${TAG}^{}" | awk '{print $1}')"
+            tag_commit="${tag_commit:-$tag_ref}"
+            test "$tag_commit" = "$head_commit"
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "cocommit $TAG" --generate-notes
