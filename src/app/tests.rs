@@ -1,6 +1,9 @@
 use super::*;
 use crate::commit::{DraftField, ValidationErrorKind};
-use crate::config::{Capitalization, IssueStyle, MessagePolicy, TerminalPunctuation, UiSections};
+use crate::{
+    commit::{Capitalization, IssueStyle, MessagePolicy, TerminalPunctuation},
+    settings::UiSections,
+};
 
 fn focus(app: &mut App, target: Focus) {
     while app.focus != target {
@@ -161,12 +164,12 @@ fn hidden_staged_changes_keep_all_files_committable_without_exclusions() {
     });
     app.set_staged_changes(crate::git::StagedChanges {
         files: vec![
-            crate::git::StagedFile::for_display(
+            crate::git::StagedFile::from_display_paths(
                 crate::git::StagedChangeKind::Added,
                 "one.txt",
                 None,
             ),
-            crate::git::StagedFile::for_display(
+            crate::git::StagedFile::from_display_paths(
                 crate::git::StagedChangeKind::Modified,
                 "two.txt",
                 None,
@@ -182,16 +185,48 @@ fn hidden_staged_changes_keep_all_files_committable_without_exclusions() {
 }
 
 #[test]
-fn staged_changes_select_files_and_leave_the_list_at_its_boundaries() {
+fn reapplying_staged_section_settings_updates_selection_visibility() {
     let mut app = App::new(false);
     app.set_staged_changes(crate::git::StagedChanges {
         files: vec![
-            crate::git::StagedFile::for_display(
+            crate::git::StagedFile::from_display_paths(
                 crate::git::StagedChangeKind::Added,
                 "one.txt",
                 None,
             ),
-            crate::git::StagedFile::for_display(
+            crate::git::StagedFile::from_display_paths(
+                crate::git::StagedChangeKind::Modified,
+                "two.txt",
+                None,
+            ),
+        ],
+        ..Default::default()
+    });
+
+    app = app.with_sections(UiSections {
+        staged_changes: false,
+        ..UiSections::default()
+    });
+    assert_eq!(app.included_staged_count(), 2);
+    assert!(app.excluded_staged_files().is_empty());
+
+    app = app.with_sections(UiSections::default());
+    assert_eq!(app.included_staged_count(), 2);
+    assert!(app.staged_file_is_included(0));
+    assert!(app.staged_file_is_included(1));
+}
+
+#[test]
+fn staged_changes_select_files_and_leave_the_list_at_its_boundaries() {
+    let mut app = App::new(false);
+    app.set_staged_changes(crate::git::StagedChanges {
+        files: vec![
+            crate::git::StagedFile::from_display_paths(
+                crate::git::StagedChangeKind::Added,
+                "one.txt",
+                None,
+            ),
+            crate::git::StagedFile::from_display_paths(
                 crate::git::StagedChangeKind::Modified,
                 "two.txt",
                 None,
@@ -203,7 +238,7 @@ fn staged_changes_select_files_and_leave_the_list_at_its_boundaries() {
 
     app.handle(AppEvent::Down);
     assert_eq!(app.focus, Focus::StagedChanges);
-    assert_eq!(app.staged_selected, 1);
+    assert_eq!(app.staged_selected(), 1);
     app.handle(AppEvent::Down);
     assert_eq!(app.focus, Focus::Preview);
     app.handle(AppEvent::Tab);
@@ -213,15 +248,15 @@ fn staged_changes_select_files_and_leave_the_list_at_its_boundaries() {
     app.handle(AppEvent::BackTab);
     assert_eq!(app.focus, Focus::StagedChanges);
     app.handle(AppEvent::Edit(Edit::Home));
-    assert_eq!(app.staged_selected, 0);
+    assert_eq!(app.staged_selected(), 0);
     app.handle(AppEvent::Up);
     assert_eq!(app.focus, Focus::Sign);
     app.handle(AppEvent::Down);
     assert_eq!(app.focus, Focus::StagedChanges);
     app.handle(AppEvent::Edit(Edit::Home));
-    assert_eq!(app.staged_selected, 0);
+    assert_eq!(app.staged_selected(), 0);
     app.handle(AppEvent::Edit(Edit::End));
-    assert_eq!(app.staged_selected, 1);
+    assert_eq!(app.staged_selected(), 1);
 }
 
 #[test]
@@ -254,12 +289,12 @@ fn space_excludes_the_selected_file_but_keeps_one_file_included() {
     let mut app = App::new(false);
     app.set_staged_changes(crate::git::StagedChanges {
         files: vec![
-            crate::git::StagedFile::for_display(
+            crate::git::StagedFile::from_display_paths(
                 crate::git::StagedChangeKind::Added,
                 "one.txt",
                 None,
             ),
-            crate::git::StagedFile::for_display(
+            crate::git::StagedFile::from_display_paths(
                 crate::git::StagedChangeKind::Modified,
                 "two.txt",
                 None,
@@ -274,7 +309,7 @@ fn space_excludes_the_selected_file_but_keeps_one_file_included() {
     assert_eq!(app.included_staged_count(), 1);
     assert_eq!(
         app.excluded_staged_files(),
-        vec![crate::git::StagedFile::for_display(
+        vec![crate::git::StagedFile::from_display_paths(
             crate::git::StagedChangeKind::Modified,
             "two.txt",
             None,
@@ -284,10 +319,9 @@ fn space_excludes_the_selected_file_but_keeps_one_file_included() {
     app.handle(AppEvent::Up);
     assert_eq!(app.handle(AppEvent::Space), AppAction::Continue);
     assert_eq!(
-        app.status_message(),
+        app.feedback.operation_status.as_deref(),
         Some("Cannot unstage the last staged file")
     );
-    assert!(app.status_is_error());
 }
 
 #[test]
@@ -391,7 +425,7 @@ fn picker_escape_keeps_existing_type_and_tabs_do_nothing() {
 #[test]
 fn cancelling_a_type_search_keeps_existing_validation_feedback() {
     let mut app = App::new(false);
-    app.validation_error = Some(ValidationError {
+    app.feedback.validation_error = Some(ValidationError {
         field: DraftField::Message,
         kind: ValidationErrorKind::Required,
     });
@@ -400,7 +434,7 @@ fn cancelling_a_type_search_keeps_existing_validation_feedback() {
     app.handle(AppEvent::Escape);
 
     assert_eq!(
-        app.validation_error,
+        app.feedback.validation_error,
         Some(ValidationError {
             field: DraftField::Message,
             kind: ValidationErrorKind::Required,
@@ -436,6 +470,42 @@ fn paste_sanitizes_line_breaks_in_form_and_picker() {
 }
 
 #[test]
+fn scope_picker_rejects_invalid_pastes_without_partial_insertion() {
+    let mut app = App::new(false);
+    app.open_scope_picker();
+
+    app.handle(AppEvent::Paste("valid(scope)".to_owned()));
+
+    let Mode::ScopePicker(picker) = &app.mode else {
+        panic!("scope picker should remain open");
+    };
+    assert!(picker.query.to_string().is_empty());
+    assert_eq!(
+        app.feedback.input_error,
+        Some(InputError::InvalidScopeCharacter)
+    );
+}
+
+#[test]
+fn empty_paste_preserves_picker_input_errors() {
+    let mut app = App::new(false);
+    app.open_picker();
+    app.feedback.input_error = Some(InputError::FieldTooLong);
+    app.handle(AppEvent::Paste(String::new()));
+    assert_eq!(app.feedback.input_error, Some(InputError::FieldTooLong));
+
+    app.open_scope_picker();
+    app.feedback.input_error = Some(InputError::FieldTooLong);
+    app.handle(AppEvent::Paste(String::new()));
+    assert_eq!(app.feedback.input_error, Some(InputError::FieldTooLong));
+
+    app.open_footer_name_picker();
+    app.feedback.input_error = Some(InputError::FieldTooLong);
+    app.handle(AppEvent::Paste(String::new()));
+    assert_eq!(app.feedback.input_error, Some(InputError::FieldTooLong));
+}
+
+#[test]
 fn input_rejects_control_characters_without_changing_the_field() {
     let mut app = App::new(false);
     focus(&mut app, Focus::Message);
@@ -443,15 +513,12 @@ fn input_rejects_control_characters_without_changing_the_field() {
     app.handle(AppEvent::Edit(Edit::Insert('\u{1b}')));
 
     assert!(app.form.message.to_string().is_empty());
-    assert_eq!(
-        app.validation_message(),
-        Some("Control characters are not supported")
-    );
+    assert_eq!(app.feedback.input_error, Some(InputError::ControlCharacter));
     app.handle(AppEvent::Paste("valid\0paste".to_owned()));
     assert!(app.form.message.to_string().is_empty());
     assert_eq!(
-        app.validation_message(),
-        Some("Paste contains unsupported control characters or is too large")
+        app.feedback.input_error,
+        Some(InputError::PasteUnsupportedContent)
     );
 
     focus(&mut app, Focus::Footers);
@@ -473,41 +540,39 @@ fn input_rejects_control_characters_without_changing_the_field() {
         MAX_FOOTER_VALUE_LENGTH - 1
     );
     assert_eq!(
-        app.validation_message(),
-        Some("Paste exceeds the field limit")
+        app.feedback.input_error,
+        Some(InputError::PasteExceedsFieldLimit)
     );
 }
 
 #[test]
 fn validation_feedback_takes_priority_over_operation_feedback() {
     let mut app = App::new(false);
-    app.validation_error = Some(ValidationError {
+    app.feedback.validation_error = Some(ValidationError {
         field: DraftField::Message,
         kind: ValidationErrorKind::Required,
     });
     app.set_operation_error("Cannot unstage the last staged file");
 
-    assert_eq!(app.status_message(), Some("Message is required"));
-    assert!(app.status_is_error());
+    assert!(app.feedback.validation_error.is_some());
+    assert!(app.feedback.operation_status.is_some());
 }
 
 #[test]
 fn picker_clears_rejected_input_feedback_when_cancelled() {
     let mut app = App::new(false);
-    app.validation_error = Some(ValidationError {
+    app.feedback.validation_error = Some(ValidationError {
         field: DraftField::Message,
         kind: ValidationErrorKind::Required,
     });
     focus(&mut app, Focus::CommitType);
     app.handle(AppEvent::Edit(Edit::Insert('\u{1b}')));
-    assert_eq!(
-        app.validation_message(),
-        Some("Control characters are not supported")
-    );
+    assert_eq!(app.feedback.input_error, Some(InputError::ControlCharacter));
 
     app.handle(AppEvent::Escape);
 
-    assert_eq!(app.validation_message(), Some("Message is required"));
+    assert!(app.feedback.input_error.is_none());
+    assert!(app.feedback.validation_error.is_some());
 }
 
 #[test]
@@ -519,21 +584,21 @@ fn input_enforces_field_and_paste_limits_without_partial_insertion() {
 
     app.handle(AppEvent::Edit(Edit::Insert('9')));
     assert_eq!(app.form.issue.to_string(), "9".repeat(MAX_ISSUE_LENGTH));
-    assert_eq!(app.validation_message(), Some("Field is too long"));
+    assert_eq!(app.feedback.input_error, Some(InputError::FieldTooLong));
 
     focus(&mut app, Focus::Message);
     app.handle(AppEvent::Paste("a".repeat(MAX_MESSAGE_LENGTH + 1)));
     assert!(app.form.message.to_string().is_empty());
     assert_eq!(
-        app.validation_message(),
-        Some("Paste exceeds the field limit")
+        app.feedback.input_error,
+        Some(InputError::PasteExceedsFieldLimit)
     );
 
     app.handle(AppEvent::Paste("b".repeat(MAX_PASTE_LENGTH + 1)));
     assert!(app.form.message.to_string().is_empty());
     assert_eq!(
-        app.validation_message(),
-        Some("Paste contains unsupported control characters or is too large")
+        app.feedback.input_error,
+        Some(InputError::PasteUnsupportedContent)
     );
 }
 
@@ -546,7 +611,7 @@ fn unicode_input_counts_characters_instead_of_bytes() {
     assert_eq!(app.form.scope.to_string().chars().count(), MAX_SCOPE_LENGTH);
     app.handle(AppEvent::Edit(Edit::Insert('界')));
     assert_eq!(app.form.scope.to_string().chars().count(), MAX_SCOPE_LENGTH);
-    assert_eq!(app.validation_message(), Some("Field is too long"));
+    assert_eq!(app.feedback.input_error, Some(InputError::FieldTooLong));
 }
 
 #[test]
@@ -566,7 +631,7 @@ fn invalid_submission_focuses_the_first_invalid_field() {
     assert_eq!(app.handle(AppEvent::Enter), AppAction::Continue);
     assert_eq!(app.focus, Focus::CommitType);
     assert_eq!(
-        app.validation_error,
+        app.feedback.validation_error,
         Some(ValidationError {
             field: DraftField::CommitType,
             kind: ValidationErrorKind::Required
@@ -579,14 +644,18 @@ fn valid_submission_preserves_signing_choice_and_clears_errors_on_edit() {
     let mut app = App::new(true);
     focus(&mut app, Focus::Submit);
     assert_eq!(app.handle(AppEvent::Enter), AppAction::Continue);
-    assert!(app.validation_error.is_some());
+    assert!(app.feedback.validation_error.is_some());
 
     focus(&mut app, Focus::Message);
     app.handle(AppEvent::Edit(Edit::Insert('a')));
-    assert!(app.validation_error.is_none());
+    assert!(app.feedback.validation_error.is_none());
     focus(&mut app, Focus::Submit);
-    assert_eq!(app.handle(AppEvent::Enter), AppAction::Submit);
-    assert!(app.sign);
+    let AppAction::Submit(intent) = app.handle(AppEvent::Enter) else {
+        panic!("valid form should submit");
+    };
+    assert_eq!(intent.draft.message, "a");
+    assert!(intent.sign);
+    assert!(intent.excluded_files.is_empty());
 }
 
 #[test]
@@ -621,12 +690,50 @@ fn help_toggles_without_losing_the_previous_mode() {
 fn submit_event_submits_from_any_form_field_but_not_the_picker() {
     let mut app = App::new(true);
     app.form.message = Input::new("add endpoint".to_owned());
-    assert_eq!(app.handle(AppEvent::Submit), AppAction::Submit);
+    assert!(matches!(app.handle(AppEvent::Submit), AppAction::Submit(_)));
 
     app.handle(AppEvent::Enter);
     assert!(matches!(app.mode, Mode::TypePicker(_)));
     assert_eq!(app.handle(AppEvent::Submit), AppAction::Continue);
     assert!(matches!(app.mode, Mode::TypePicker(_)));
+}
+
+#[test]
+fn submission_intent_includes_excluded_staged_files() {
+    let mut app = App::new(false);
+    app.form.message = Input::new("add endpoint".to_owned());
+    app.set_staged_changes(crate::git::StagedChanges {
+        files: vec![
+            crate::git::StagedFile::from_display_paths(
+                crate::git::StagedChangeKind::Added,
+                "one.txt",
+                None,
+            ),
+            crate::git::StagedFile::from_display_paths(
+                crate::git::StagedChangeKind::Modified,
+                "two.txt",
+                None,
+            ),
+        ],
+        ..Default::default()
+    });
+    focus(&mut app, Focus::StagedChanges);
+    app.handle(AppEvent::Down);
+    app.handle(AppEvent::Space);
+
+    let AppAction::Submit(intent) = app.handle(AppEvent::Submit) else {
+        panic!("valid form should submit");
+    };
+    assert_eq!(intent.draft.message, "add endpoint");
+    assert!(!intent.sign);
+    assert_eq!(
+        intent.excluded_files,
+        vec![crate::git::StagedFile::from_display_paths(
+            crate::git::StagedChangeKind::Modified,
+            "two.txt",
+            None,
+        )]
+    );
 }
 
 #[test]
@@ -648,6 +755,13 @@ fn preview_omits_an_invalid_issue_until_submission() {
     app.form.issue = Input::new("not-a-number".to_owned());
 
     assert_eq!(app.preview(), "feat: add endpoint");
+    assert_eq!(
+        app.draft(),
+        Err(vec![ValidationError {
+            field: DraftField::Issue,
+            kind: ValidationErrorKind::InvalidDecimal,
+        }])
+    );
 }
 
 #[test]
@@ -661,11 +775,11 @@ fn preview_can_expand_scroll_and_restore_the_form() {
     app.handle(AppEvent::Enter);
     assert!(matches!(app.mode, Mode::PreviewExpanded));
     app.handle(AppEvent::Down);
-    assert_eq!(app.preview_scroll, 1);
+    assert_eq!(app.preview_state.scroll, 1);
     app.handle(AppEvent::Edit(Edit::End));
-    assert_eq!(app.preview_scroll, 8);
+    assert_eq!(app.preview_state.scroll, 8);
     app.handle(AppEvent::Edit(Edit::Home));
-    assert_eq!(app.preview_scroll, 0);
+    assert_eq!(app.preview_state.scroll, 0);
     app.handle(AppEvent::Help);
     app.handle(AppEvent::Escape);
     assert!(matches!(app.mode, Mode::PreviewExpanded));
@@ -682,18 +796,18 @@ fn preview_scrolls_before_arrow_keys_leave_its_boundaries() {
 
     app.handle(AppEvent::Down);
     assert_eq!(app.focus, Focus::Preview);
-    assert_eq!(app.preview_scroll, 1);
+    assert_eq!(app.preview_state.scroll, 1);
     app.handle(AppEvent::Down);
-    assert_eq!(app.preview_scroll, 2);
+    assert_eq!(app.preview_state.scroll, 2);
     app.handle(AppEvent::Down);
     assert_eq!(app.focus, Focus::Submit);
 
     app.handle(AppEvent::Up);
     assert_eq!(app.focus, Focus::Preview);
     app.handle(AppEvent::Up);
-    assert_eq!(app.preview_scroll, 1);
+    assert_eq!(app.preview_state.scroll, 1);
     app.handle(AppEvent::Up);
-    assert_eq!(app.preview_scroll, 0);
+    assert_eq!(app.preview_state.scroll, 0);
     app.handle(AppEvent::Up);
     assert_eq!(app.focus, Focus::StagedChanges);
 }
@@ -701,12 +815,12 @@ fn preview_scrolls_before_arrow_keys_leave_its_boundaries() {
 #[test]
 fn preview_scroll_resets_when_the_draft_changes() {
     let mut app = App::new(false);
-    app.preview_scroll = 8;
+    app.preview_state.scroll = 8;
     focus(&mut app, Focus::Message);
 
     app.handle(AppEvent::Edit(Edit::Insert('a')));
 
-    assert_eq!(app.preview_scroll, 0);
+    assert_eq!(app.preview_state.scroll, 0);
 }
 
 #[test]
@@ -763,6 +877,31 @@ fn footer_editor_can_add_breaking_delete_and_reorder() {
     editor.value = Input::new("Updated API change".to_owned());
     app.handle(AppEvent::Submit);
     assert_eq!(app.form.footers[0].value, "Updated API change");
+}
+
+#[test]
+fn footer_editor_only_allows_multiline_paste_in_value() {
+    let mut app = App::new(false);
+    focus(&mut app, Focus::Footers);
+    app.handle(AppEvent::Space);
+    let Mode::FooterEditor(editor) = &mut app.mode else {
+        panic!("footer editor should open");
+    };
+    editor.token = Input::default();
+    editor.focus = FooterEditorFocus::Name;
+
+    app.handle(AppEvent::Paste("Closes\r\n#42".to_owned()));
+    let Mode::FooterEditor(editor) = &mut app.mode else {
+        panic!("footer editor should remain open");
+    };
+    assert_eq!(editor.token.to_string(), "Closes #42");
+
+    editor.focus = FooterEditorFocus::Value;
+    app.handle(AppEvent::Paste("first\r\nsecond".to_owned()));
+    let Mode::FooterEditor(editor) = &app.mode else {
+        panic!("footer editor should remain open");
+    };
+    assert_eq!(editor.value.to_string(), "first\nsecond");
 }
 
 #[test]
