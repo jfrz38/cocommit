@@ -43,7 +43,6 @@ impl Default for UiPreferences {
 #[serde(default, deny_unknown_fields)]
 struct GlobalFile {
     schema_version: Option<u32>,
-    sign: Option<bool>,
     ui: Option<UiPreferencesPatch>,
     message: Option<MessagePolicyPatch>,
 }
@@ -162,20 +161,12 @@ fn parse_global(contents: &str, path: &Path) -> Result<GlobalFile> {
             "global configuration file at {} uses schema fields but has no schema_version",
             path.display()
         ),
-        Some(0) => bail!(
-            "global configuration file at {} uses unsupported schema_version 0; omit schema_version for the legacy sign setting",
-            path.display()
-        ),
-        Some(SCHEMA_VERSION) if file.sign.is_none() => {
+        Some(SCHEMA_VERSION) => {
             validate_message_patch(file.message.as_ref()).with_context(|| {
                 format!("invalid global configuration file at {}", path.display())
             })?;
             Ok(file)
         }
-        Some(SCHEMA_VERSION) => bail!(
-            "global configuration file at {} cannot combine legacy sign with schema_version {SCHEMA_VERSION}",
-            path.display()
-        ),
         Some(version) => bail!(
             "global configuration file at {} uses unsupported schema_version {version}",
             path.display()
@@ -259,9 +250,6 @@ fn validate_message_patch(patch: Option<&MessagePolicyPatch>) -> Result<()> {
 }
 
 fn merge_global(config: &mut Config, file: GlobalFile) {
-    if let Some(sign) = file.sign {
-        config.ui.sign = sign;
-    }
     if let Some(ui) = file.ui {
         merge_ui(&mut config.ui, ui);
     }

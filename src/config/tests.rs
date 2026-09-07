@@ -81,17 +81,6 @@ fn accepts_all_optional_sections_hidden_globally() {
 }
 
 #[test]
-fn loads_legacy_global_signing_preference() {
-    let directory = tempfile::tempdir().expect("temporary directory should be created");
-    let global = directory.path().join("global.toml");
-    fs::write(&global, "sign = false").expect("global configuration should be written");
-
-    let config = load_from_paths(Some(&global), directory.path()).unwrap();
-
-    assert!(!config.ui.sign);
-}
-
-#[test]
 fn repository_policy_overrides_global_policy_by_field() {
     let directory = tempfile::tempdir().expect("temporary directory should be created");
     let global = directory.path().join("global.toml");
@@ -211,12 +200,13 @@ fn rejects_ui_preferences_in_repository_configuration() {
 }
 
 #[test]
-fn rejects_invalid_schema_versions_and_mixed_legacy_configuration() {
+fn rejects_invalid_schema_versions_and_configuration_forms() {
     let directory = tempfile::tempdir().expect("temporary directory should be created");
     let global = directory.path().join("global.toml");
     for contents in [
         "schema_version = 0",
         "schema_version = 2",
+        "sign = false",
         "[message]\ntypes = [\"feat\"]",
         "schema_version = 1\nsign = false",
     ] {

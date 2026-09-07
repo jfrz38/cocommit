@@ -9,24 +9,21 @@
 
 Built-in defaults are loaded first, followed by global configuration and then
 repository configuration. Repository configuration cannot change UI settings.
+Global configuration may also define a default `[message]` policy; repository
+configuration overrides message-policy values field by field.
 Missing files are ignored. Invalid files are reported with their path and are
 never rewritten by cocommit.
 
 ## Global preferences
 
-The legacy form is supported for the signing default:
-
-```toml
-sign = false
-```
-
-New files use `schema_version = 1`:
+Signing is enabled by default, and all optional composer sections are visible by
+default. Global preferences use `schema_version = 1`:
 
 ```toml
 schema_version = 1
 
 [ui]
-sign = true
+sign = false
 
 [ui.sections]
 staged_changes = true

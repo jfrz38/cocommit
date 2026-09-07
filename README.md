@@ -62,18 +62,46 @@ the message useful later. The preview is the exact message passed to Git.
 
 ## Make it yours
 
-Global preferences control signing and visible optional sections. A repository
-`.cocommit.toml` can share allowed types, scope suggestions, subject rules, and
-issue formatting with the team.
+`cocommit` reads two optional TOML files:
+
+- **Global** preferences live in your user configuration directory and set
+  personal defaults for signing, visible composer sections, and optionally
+  message policy.
+- **Repository** policy lives in `.cocommit.toml` at the Git work-tree root.
+  Commit this file to the repository so the whole team shares the same commit
+  conventions.
+
+Signing and all optional sections are enabled by default. Repository policy can
+restrict commit types, offer scope suggestions, enforce subject rules, and set
+the issue-reference format:
 
 ```toml
+schema_version = 1
+
 [message]
 types = ["feat", "fix", "docs"]
 scope_suggestions = ["api", "tui"]
+
+[message.subject]
+max_length = 72
+capitalization = "lowercase"
+terminal_punctuation = "forbid"
+
+[message.issue]
+prefix = "PROJ-"
+style = "plain"
 ```
 
-See [configuration](docs/configuration.md) for paths, the full schema, and more
-examples.
+An explicit `types` list restricts the allowed types; omit it to keep the
+standard types as suggestions while allowing custom types. Scope suggestions
+are never restrictive.
+
+Configuration is merged in this order: built-in defaults, global configuration,
+then repository configuration. Each layer overrides the previous one field by
+field. Repository files can change message policy but not personal UI settings.
+
+See [configuration](docs/configuration.md) for exact paths, the full schema,
+and more examples.
 
 ## Technical details
 
