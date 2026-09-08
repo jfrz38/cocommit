@@ -41,7 +41,7 @@ cargo-deny-version: ## verify the installed cargo-deny version
 	@$(CARGO_DENY) --version | grep -F "cargo-deny $(CARGO_DENY_VERSION)"
 
 supply-chain-check: cargo-deny-version ## check dependency advisories, licenses, and sources
-	CARGO_HOME="$(CURDIR)/target/cargo-home" $(CARGO_DENY) check advisories licenses sources
+	$(CARGO_DENY) check advisories licenses sources
 
 .PHONY: check check-portability check-workflows package-contents-check release-check release-check-clean ci
 check: fmt-check lint test build ## run all local quality checks
