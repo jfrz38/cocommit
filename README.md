@@ -2,10 +2,10 @@
 
 **Craft complete Conventional Commit messages without leaving your terminal.**
 
-[![CI](https://github.com/jfrz38/cocommit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jfrz38/cocommit/actions/workflows/ci.yml)
+[![CI](https://github.com/jfrz38/cocommit/actions/workflows/ci.yml/badge.svg)](https://github.com/jfrz38/cocommit/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/cocommit?logo=rust)](https://crates.io/crates/cocommit)
 [![Downloads](https://img.shields.io/crates/d/cocommit)](https://crates.io/crates/cocommit)
-[![License](https://img.shields.io/github/license/jfrz38/cocommit)](LICENSE)
+[![License](https://img.shields.io/crates/l/cocommit.svg)](LICENSE)
 [![MSRV](https://img.shields.io/badge/rustc-1.94.1%2B-blue)](https://www.rust-lang.org)
 
 Writing a good commit message should not interrupt your flow. `cocommit` guides
