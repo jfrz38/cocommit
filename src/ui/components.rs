@@ -14,6 +14,7 @@ use crate::{
         Capitalization, DraftField, SubjectPolicy, TerminalPunctuation, ValidationError,
         ValidationErrorKind,
     },
+    settings::AccentColor,
 };
 
 use super::preview::clamp_scroll;
@@ -42,8 +43,9 @@ pub(super) fn render_text_row(
     label: &str,
     input: &Input,
     focused: bool,
+    accent_color: AccentColor,
 ) -> Option<Position> {
-    let block = field_block(label, focused);
+    let block = field_block(label, focused, accent_color);
     let input_area = block.inner(area);
     let view = multiline_view(input, input_area);
     frame.render_widget(block, area);
@@ -93,20 +95,32 @@ pub(super) fn render_toggle_row(
     label: &str,
     value: bool,
     focused: bool,
+    accent_color: AccentColor,
 ) {
     let marker = if value { "x" } else { " " };
-    let block = field_block(label, focused);
+    let block = field_block(label, focused, accent_color);
     let content = block.inner(area);
     frame.render_widget(block, area);
     frame.render_widget(Paragraph::new(format!("[{marker}]")), content);
 }
 
-pub(super) fn render_submit_row(frame: &mut Frame, area: Rect, focused: bool) {
-    render_action_row(frame, area, "Commit", focused);
+pub(super) fn render_submit_row(
+    frame: &mut Frame,
+    area: Rect,
+    focused: bool,
+    accent_color: AccentColor,
+) {
+    render_action_row(frame, area, "Commit", focused, accent_color);
 }
 
-pub(super) fn render_action_row(frame: &mut Frame, area: Rect, label: &str, focused: bool) {
-    let style = focused_style(focused);
+pub(super) fn render_action_row(
+    frame: &mut Frame,
+    area: Rect,
+    label: &str,
+    focused: bool,
+    accent_color: AccentColor,
+) {
+    let style = focused_style(focused, accent_color);
     let block = Block::default().borders(Borders::ALL).border_style(style);
     let content = block.inner(area);
     frame.render_widget(block, area);
@@ -147,9 +161,11 @@ pub(super) fn footer_hint() -> &'static str {
 
 pub(super) fn subject_indicator(message: &Input, policy: &SubjectPolicy) -> String {
     let length = message.to_string().chars().count();
-    let limit = policy
-        .max_length
-        .map_or_else(|| length.to_string(), |max| format!("{length}/{max}"));
+    let counter = match policy.max_length {
+        Some(limit) => Some(format!("({length}/{limit})")),
+        None if length > 0 => Some(format!("({length} chars)")),
+        None => None,
+    };
     let capitalization = match policy.capitalization {
         Capitalization::Allow => None,
         Capitalization::Lowercase => Some("lowercase"),
@@ -161,7 +177,10 @@ pub(super) fn subject_indicator(message: &Input, policy: &SubjectPolicy) -> Stri
         TerminalPunctuation::Require => Some("terminal punctuation required"),
     };
     [
-        Some(format!("Subject {limit}")),
+        Some(match counter {
+            Some(counter) => format!("Subject {counter}"),
+            None => "Subject".to_owned(),
+        }),
         capitalization.map(str::to_owned),
         punctuation.map(str::to_owned),
     ]
@@ -187,20 +206,41 @@ pub(super) fn type_picker_title(types_are_restricted: bool) -> &'static str {
     }
 }
 
-pub(super) fn field_block(label: &str, focused: bool) -> Block<'_> {
+pub(super) fn field_block(label: &str, focused: bool, accent_color: AccentColor) -> Block<'_> {
     Block::default()
         .borders(Borders::ALL)
         .title(Line::from(format!(" {label} ")))
-        .border_style(focused_style(focused))
+        .border_style(focused_style(focused, accent_color))
 }
 
-pub(super) fn focused_style(focused: bool) -> Style {
+pub(super) fn focused_style(focused: bool, accent_color: AccentColor) -> Style {
     if focused {
         Style::default()
-            .fg(Color::Cyan)
+            .fg(accent_to_ratatui(accent_color))
             .add_modifier(Modifier::BOLD)
     } else {
         Style::default()
+    }
+}
+
+pub(super) fn accent_to_ratatui(color: AccentColor) -> Color {
+    match color {
+        AccentColor::Black => Color::Black,
+        AccentColor::Red => Color::Red,
+        AccentColor::Green => Color::Green,
+        AccentColor::Yellow => Color::Yellow,
+        AccentColor::Blue => Color::Blue,
+        AccentColor::Magenta => Color::Magenta,
+        AccentColor::Cyan => Color::Cyan,
+        AccentColor::Gray => Color::Gray,
+        AccentColor::DarkGray => Color::DarkGray,
+        AccentColor::LightRed => Color::LightRed,
+        AccentColor::LightGreen => Color::LightGreen,
+        AccentColor::LightYellow => Color::LightYellow,
+        AccentColor::LightBlue => Color::LightBlue,
+        AccentColor::LightMagenta => Color::LightMagenta,
+        AccentColor::LightCyan => Color::LightCyan,
+        AccentColor::White => Color::White,
     }
 }
 
@@ -257,17 +297,17 @@ fn validation_error_message(error: ValidationError) -> &'static str {
         (DraftField::Scope, ValidationErrorKind::ContainsForbiddenCharacter) => {
             "Scope cannot contain parentheses"
         }
-        (DraftField::Message, ValidationErrorKind::Required) => "Message is required",
-        (DraftField::Message, ValidationErrorKind::MustBeSingleLine) => "Message must be one line",
-        (DraftField::Message, ValidationErrorKind::TooLong) => "Message exceeds repository limit",
+        (DraftField::Message, ValidationErrorKind::Required) => "Subject is required",
+        (DraftField::Message, ValidationErrorKind::MustBeSingleLine) => "Subject must be one line",
+        (DraftField::Message, ValidationErrorKind::TooLong) => "Subject exceeds repository limit",
         (DraftField::Message, ValidationErrorKind::InvalidCapitalization) => {
-            "Message capitalization does not match policy"
+            "Subject capitalization does not match policy"
         }
         (DraftField::Message, ValidationErrorKind::TerminalPunctuationForbidden) => {
-            "Message cannot end with . ! or ?"
+            "Subject cannot end with . ! or ?"
         }
         (DraftField::Message, ValidationErrorKind::TerminalPunctuationRequired) => {
-            "Message must end with . ! or ?"
+            "Subject must end with . ! or ?"
         }
         (DraftField::Issue, ValidationErrorKind::InvalidDecimal) => {
             "Issue must be a decimal number"

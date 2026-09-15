@@ -24,7 +24,7 @@ pub(super) fn render(frame: &mut Frame, area: Rect, app: &App) {
                 Block::default()
                     .borders(Borders::ALL)
                     .title(" Help ")
-                    .border_style(focused_style(true)),
+                    .border_style(focused_style(true, app.accent_color())),
             )
             .wrap(Wrap { trim: true }),
         popup,
@@ -58,15 +58,29 @@ fn text(app: &App) -> String {
             }
         ),
         format!(
-            "Enter            Type picker{}; open preview",
+            "Enter            {}{}open preview",
+            if sections.commit_type {
+                "Type picker; "
+            } else {
+                ""
+            },
             if sections.body {
-                "; newline in body"
+                "newline in body; "
             } else {
                 ""
             }
         ),
-        "Space            Toggle Breaking or Sign".to_owned(),
     ];
+    let toggles = [
+        sections.breaking.then_some("Breaking"),
+        sections.sign.then_some("Sign"),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>();
+    if !toggles.is_empty() {
+        lines.push(format!("Space            Toggle {}", toggles.join(" or ")));
+    }
     if sections.footers {
         lines.extend([
             "A                Open footer-name picker".to_owned(),

@@ -47,8 +47,8 @@ git add src/main.rs
 cocommit
 ```
 
-Start with the type, describe the change, and add the optional details that make
-the message useful later. The preview is the exact message passed to Git.
+Describe the change and add the optional details that make the message useful
+later. The preview is the exact message passed to Git.
 
 ## Keyboard first
 
@@ -67,13 +67,15 @@ the message useful later. The preview is the exact message passed to Git.
 `cocommit` reads two optional TOML files:
 
 - **Global** preferences live in your user configuration directory and set
-  personal defaults for signing, visible composer sections, and optionally
-  message policy.
+personal defaults for signing, visible composer sections, and optionally
+  the accent color and message policy.
 - **Repository** policy lives in `.cocommit.toml` at the Git work-tree root.
   Commit this file to the repository so the whole team shares the same commit
   conventions.
 
-Signing and all optional sections are enabled by default. Repository policy can
+Signing and all configurable sections are enabled by default. Global preferences
+can hide any composer field except the subject; hiding Type creates a subject-only
+message. Repository policy can
 restrict commit types, offer scope suggestions, enforce subject rules, and set
 the issue-reference format:
 
@@ -92,6 +94,9 @@ terminal_punctuation = "forbid"
 [message.issue]
 prefix = "PROJ-"
 style = "plain"
+
+[message.format]
+separator = ":"
 ```
 
 An explicit `types` list restricts the allowed types; omit it to keep the
@@ -101,6 +106,8 @@ are never restrictive.
 Configuration is merged in this order: built-in defaults, global configuration,
 then repository configuration. Each layer overrides the previous one field by
 field. Repository files can change message policy but not personal UI settings.
+The global file can also run explicit executable-and-argument lists to prefill
+visible Type, Scope, Body, or Issue fields; repository files cannot define them.
 
 See [configuration](docs/configuration.md) for exact paths, the full schema,
 and more examples.

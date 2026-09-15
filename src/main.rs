@@ -1,7 +1,7 @@
 use std::{env, process::ExitCode};
 
 use anyhow::{Context, Result};
-use cocommit::{app, cli, commit_workflow::CommitWorkflow, config, git, terminal};
+use cocommit::{app, cli, commit_workflow::CommitWorkflow, config, defaults, git, terminal};
 
 const EXIT_FAILURE: u8 = 1;
 const EXIT_USAGE: u8 = 2;
@@ -36,9 +36,17 @@ fn run() -> Result<()> {
     let staged_changes = git::preflight(&working_directory)?;
     let work_tree_root = git::work_tree_root(&working_directory)?;
     let config = config::load(&work_tree_root)?;
+    let composer_defaults = defaults::resolve(
+        &config.defaults,
+        &work_tree_root,
+        config.ui.sections,
+        &config.message,
+    )?;
     let mut app = app::App::new(config.ui.sign)
         .with_sections(config.ui.sections)
-        .with_message_policy(&config.message);
+        .with_accent_color(config.ui.accent_color)
+        .with_message_policy(&config.message)
+        .with_defaults(&composer_defaults);
     app.set_staged_changes(staged_changes);
     match terminal::run(&mut app)? {
         terminal::TerminalResult::Cancelled => {}
