@@ -44,7 +44,7 @@ jobs:
           persist-credentials: false
       - name: Check version can be published
         id: version-check
-        uses: jfrz38/check-version-change@c087b716b54ed45079f2440924db036f636539b3 # v1.3.1
+        uses: jfrz38/check-version-change@712f1f323f716ff1241b4fdd99e698d56daf462d # v1.4.0
         with:
           file-path: Cargo.toml
           package-name: cocommit
