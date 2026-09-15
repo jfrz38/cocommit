@@ -60,16 +60,19 @@ jobs:
           exit 1
       - name: Create immutable tag and GitHub Release
         if: >-
-          github.event_name == 'push' &&
+          (github.event_name == 'workflow_dispatch' ||
+          (github.event_name == 'push' &&
           steps.version-change.outputs.changed == 'true' &&
           (steps.version-change.outputs.compared-version == '' ||
-          steps.version-change.outputs.is-higher == 'true')
+          steps.version-change.outputs.is-higher == 'true')))
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: v${{ steps.version.outputs.value }}
         shell: bash
         run: |
           set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          gh auth setup-git --hostname github.com
           tag_ref="$(git ls-remote origin "refs/tags/${TAG}" | awk '{print $1}')"
           head_commit="$(git rev-parse HEAD)"
           if [ -n "$tag_ref" ]; then
