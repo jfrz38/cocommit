@@ -33,7 +33,7 @@ impl App {
 
     pub(super) fn ensure_visible_focus(&mut self) {
         if !self.visible_focuses().contains(&self.focus) {
-            self.focus = Focus::CommitType;
+            self.focus = self.visible_focuses()[0];
             self.mode = super::Mode::Form;
         }
     }

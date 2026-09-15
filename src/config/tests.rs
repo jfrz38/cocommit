@@ -1,8 +1,8 @@
 use std::fs;
 
 use super::{
-    Capitalization, Config, IssueStyle, TerminalPunctuation, global_config_path, load_from_paths,
-    repository_config_path,
+    AccentColor, Capitalization, Config, IssueStyle, TerminalPunctuation, global_config_path,
+    load_from_paths, repository_config_path,
 };
 use crate::settings::UiSections;
 
@@ -17,6 +17,7 @@ fn defaults_preserve_the_existing_signing_and_message_behavior() {
     assert!(config.message.scope_suggestions.is_empty());
     assert_eq!(config.message.issue.prefix, "#");
     assert_eq!(config.message.issue.style, IssueStyle::Parenthesized);
+    assert_eq!(config.message.format.separator, ":");
 }
 
 #[test]
@@ -32,6 +33,52 @@ fn rejects_empty_scope_suggestions() {
     let error = load_from_paths(None, directory.path()).unwrap_err();
 
     assert!(format!("{error:#}").contains("scope_suggestions"));
+}
+
+#[test]
+fn loads_global_default_commands_as_literal_argument_lists() {
+    let directory = tempfile::tempdir().expect("temporary directory should be created");
+    let global = directory.path().join("global.toml");
+    fs::write(
+        &global,
+        r#"schema_version = 1
+
+[defaults.type]
+command = ["pwsh", "-NoProfile", "-File", "type.ps1"]
+
+[defaults.scope]
+command = ["git", "branch", "--show-current"]
+"#,
+    )
+    .expect("global configuration should be written");
+
+    let config = load_from_paths(Some(&global), directory.path()).unwrap();
+
+    assert_eq!(
+        config.defaults.commit_type.unwrap().command,
+        ["pwsh", "-NoProfile", "-File", "type.ps1"]
+    );
+    assert_eq!(
+        config.defaults.scope.unwrap().command,
+        ["git", "branch", "--show-current"]
+    );
+}
+
+#[test]
+fn rejects_invalid_or_repository_defined_default_commands() {
+    let directory = tempfile::tempdir().expect("temporary directory should be created");
+    let global = directory.path().join("global.toml");
+    fs::write(&global, "schema_version = 1\n[defaults.type]\ncommand = []")
+        .expect("global configuration should be written");
+    assert!(load_from_paths(Some(&global), directory.path()).is_err());
+
+    fs::write(&global, "").expect("global configuration should be cleared");
+    fs::write(
+        repository_config_path(directory.path()),
+        "schema_version = 1\n[defaults.scope]\ncommand = [\"git\"]",
+    )
+    .expect("repository configuration should be written");
+    assert!(load_from_paths(Some(&global), directory.path()).is_err());
 }
 
 #[test]
@@ -53,6 +100,7 @@ fn merges_global_section_preferences_by_field() {
             body: false,
             footers: true,
             issue: false,
+            ..UiSections::default()
         }
     );
 }
@@ -63,7 +111,7 @@ fn accepts_all_optional_sections_hidden_globally() {
     let global = directory.path().join("global.toml");
     fs::write(
         &global,
-        "schema_version = 1\n[ui.sections]\nstaged_changes = false\nbody = false\nfooters = false\nissue = false",
+        "schema_version = 1\n[ui.sections]\ntype = false\nscope = false\nbreaking = false\nstaged_changes = false\nbody = false\nfooters = false\nissue = false\nsign = false",
     )
     .expect("global configuration should be written");
 
@@ -72,10 +120,14 @@ fn accepts_all_optional_sections_hidden_globally() {
     assert_eq!(
         config.ui.sections,
         UiSections {
+            commit_type: false,
+            scope: false,
+            breaking: false,
             staged_changes: false,
             body: false,
             footers: false,
             issue: false,
+            sign: false,
         }
     );
 }
@@ -90,6 +142,7 @@ fn repository_policy_overrides_global_policy_by_field() {
 
 [ui]
 sign = false
+accent_color = "magenta"
 
 [message]
 types = ["feat", "fix"]
@@ -102,6 +155,9 @@ capitalization = "lowercase"
 [message.issue]
 prefix = "PROJ-"
 style = "plain"
+
+[message.format]
+separator = "-"
 "#,
     )
     .expect("global configuration should be written");
@@ -125,6 +181,7 @@ style = "parenthesized"
     let config = load_from_paths(Some(&global), directory.path()).unwrap();
 
     assert!(!config.ui.sign);
+    assert_eq!(config.ui.accent_color, AccentColor::Magenta);
     assert_eq!(config.message.types, ["docs"]);
     assert!(config.message.types_are_restricted);
     assert!(config.message.scope_suggestions.is_empty());
@@ -139,6 +196,7 @@ style = "parenthesized"
     );
     assert_eq!(config.message.issue.prefix, "PROJ-");
     assert_eq!(config.message.issue.style, IssueStyle::Parenthesized);
+    assert_eq!(config.message.format.separator, "-");
 }
 
 #[test]
@@ -180,6 +238,7 @@ fn rejects_unknown_keys_at_every_schema_level() {
         "schema_version = 1\n[message]\nunknown = true",
         "schema_version = 1\n[message.subject]\nunknown = true",
         "schema_version = 1\n[message.issue]\nunknown = true",
+        "schema_version = 1\n[message.format]\nunknown = true",
     ] {
         fs::write(&global, contents).expect("global configuration should be written");
         assert!(load_from_paths(Some(&global), directory.path()).is_err());
@@ -234,6 +293,21 @@ fn rejects_invalid_policy_values_with_their_repository_path() {
     let message = format!("{error:#}");
     assert!(message.contains(&repository.display().to_string()));
     assert!(message.contains("types cannot be empty"));
+}
+
+#[test]
+fn rejects_invalid_message_separators() {
+    let directory = tempfile::tempdir().expect("temporary directory should be created");
+    let global = directory.path().join("global.toml");
+    for separator in ["too-long!", "has space", "line\\nbreak"] {
+        fs::write(
+            &global,
+            format!("schema_version = 1\n[message.format]\nseparator = {separator:?}"),
+        )
+        .expect("global configuration should be written");
+
+        assert!(load_from_paths(Some(&global), directory.path()).is_err());
+    }
 }
 
 #[test]

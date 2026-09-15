@@ -14,6 +14,7 @@ pub struct MessagePolicy {
     pub scope_suggestions: Vec<String>,
     pub subject: SubjectPolicy,
     pub issue: IssuePolicy,
+    pub format: MessageFormat,
 }
 
 impl Default for MessagePolicy {
@@ -24,6 +25,21 @@ impl Default for MessagePolicy {
             scope_suggestions: Vec::new(),
             subject: SubjectPolicy::default(),
             issue: IssuePolicy::default(),
+            format: MessageFormat::default(),
+        }
+    }
+}
+
+/// Delimiters used to render the commit header.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MessageFormat {
+    pub separator: String,
+}
+
+impl Default for MessageFormat {
+    fn default() -> Self {
+        Self {
+            separator: ":".to_owned(),
         }
     }
 }

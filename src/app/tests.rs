@@ -101,6 +101,7 @@ fn every_section_combination_has_a_complete_focus_path() {
             body: flags & 2 != 0,
             footers: flags & 4 != 0,
             issue: flags & 8 != 0,
+            ..UiSections::default()
         };
         let mut app = App::new(false).with_sections(sections);
         let expected = app.visible_focuses();
@@ -130,6 +131,7 @@ fn hidden_optional_sections_are_absent_from_draft_and_interaction() {
         body: false,
         footers: false,
         issue: false,
+        ..UiSections::default()
     };
     let mut app = App::new(false).with_sections(sections);
     app.form.body = Input::new("must not render".to_owned());
@@ -154,6 +156,65 @@ fn hidden_optional_sections_are_absent_from_draft_and_interaction() {
     assert!(app.form.body.to_string().is_empty());
     assert!(app.form.issue.to_string().is_empty());
     assert!(app.form.footers.is_empty());
+}
+
+#[test]
+fn hidden_header_fields_produce_a_subject_only_and_hidden_sign_is_retained() {
+    let sections = UiSections {
+        commit_type: false,
+        scope: true,
+        breaking: true,
+        sign: false,
+        ..UiSections::default()
+    };
+    let policy = MessagePolicy {
+        types: vec!["fix".to_owned()],
+        types_are_restricted: true,
+        ..MessagePolicy::default()
+    };
+    let mut app = App::new(true)
+        .with_sections(sections)
+        .with_message_policy(&policy);
+    app.form.scope = Input::new("ignored".to_owned());
+    app.form.breaking = true;
+    app.form.message = Input::new("plain subject".to_owned());
+
+    assert_eq!(app.focus, Focus::Message);
+    assert_eq!(app.preview(), "plain subject");
+    assert_eq!(app.form.commit_type.to_string(), "");
+    assert!(!app.visible_focuses().contains(&Focus::CommitType));
+    assert!(!app.visible_focuses().contains(&Focus::Scope));
+    assert!(!app.visible_focuses().contains(&Focus::Breaking));
+    assert!(!app.visible_focuses().contains(&Focus::Sign));
+
+    let AppAction::Submit(intent) = app.handle(AppEvent::Submit) else {
+        panic!("subject-only draft should submit");
+    };
+    assert_eq!(intent.draft.commit_type, None);
+    assert_eq!(intent.draft.scope, None);
+    assert!(!intent.draft.breaking);
+    assert!(intent.sign);
+}
+
+#[test]
+fn resolved_defaults_prefill_only_visible_fields() {
+    let defaults = ComposerDefaults {
+        commit_type: Some("fix".to_owned()),
+        scope: Some("api".to_owned()),
+        body: Some("context".to_owned()),
+        issue: Some("42".to_owned()),
+    };
+    let app = App::new(false)
+        .with_sections(UiSections {
+            body: false,
+            ..UiSections::default()
+        })
+        .with_defaults(&defaults);
+
+    assert_eq!(app.form.commit_type.to_string(), "fix");
+    assert_eq!(app.form.scope.to_string(), "api");
+    assert!(app.form.body.to_string().is_empty());
+    assert_eq!(app.form.issue.to_string(), "42");
 }
 
 #[test]

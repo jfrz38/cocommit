@@ -10,7 +10,7 @@ fn draft(
     issue: Option<u64>,
 ) -> CommitDraft {
     CommitDraft::new(
-        commit_type.to_owned(),
+        Some(commit_type.to_owned()),
         scope.map(str::to_owned),
         breaking,
         message.to_owned(),
@@ -63,7 +63,7 @@ fn renders_all_optional_field_combinations() {
 fn normalizes_outer_whitespace_and_empty_scope() {
     let draft = draft(" feat ", Some("  "), false, " add authentication ", None);
 
-    assert_eq!(draft.commit_type, "feat");
+    assert_eq!(draft.commit_type.as_deref(), Some("feat"));
     assert_eq!(draft.scope, None);
     assert_eq!(draft.message, "add authentication");
     assert_eq!(draft.render_message(), "feat: add authentication");
@@ -74,6 +74,39 @@ fn renders_custom_type() {
     assert_eq!(
         draft("release", None, false, "publish version", None).render_message(),
         "release: publish version"
+    );
+}
+
+#[test]
+fn renders_and_validates_a_subject_without_a_type() {
+    let draft = CommitDraft::new(
+        None,
+        Some("ignored".to_owned()),
+        true,
+        "plain subject".to_owned(),
+        None,
+        None,
+        Vec::new(),
+    );
+
+    assert_eq!(draft.validated_message(), Ok("plain subject".to_owned()));
+}
+
+#[test]
+fn renders_the_configured_header_separator() {
+    let draft = draft("feat", None, false, "plain subject", None);
+    let mut policy = MessagePolicy::default();
+
+    policy.format.separator = "-".to_owned();
+    assert_eq!(
+        draft.render_message_with_policy(&policy),
+        "feat- plain subject"
+    );
+
+    policy.format.separator.clear();
+    assert_eq!(
+        draft.render_message_with_policy(&policy),
+        "feat plain subject"
     );
 }
 
@@ -203,7 +236,7 @@ fn rejects_non_decimal_or_overflowing_issue() {
 fn from_raw_aggregates_errors_in_field_order() {
     assert_eq!(
         CommitDraft::from_raw(
-            "bad type".to_owned(),
+            Some("bad type".to_owned()),
             Some("bad(scope".to_owned()),
             false,
             "\n".to_owned(),
@@ -229,7 +262,7 @@ fn from_raw_aggregates_errors_in_field_order() {
 #[test]
 fn renders_body_and_ordered_footers_with_exact_separation() {
     let draft = CommitDraft::new(
-        "feat".to_owned(),
+        Some("feat".to_owned()),
         Some("api".to_owned()),
         false,
         "add bulk import".to_owned(),
@@ -252,7 +285,7 @@ fn renders_body_and_ordered_footers_with_exact_separation() {
 #[test]
 fn normalizes_multiline_sections_without_losing_internal_structure() {
     let draft = CommitDraft::new(
-        "feat".to_owned(),
+        Some("feat".to_owned()),
         None,
         false,
         "add import".to_owned(),
@@ -267,7 +300,7 @@ fn normalizes_multiline_sections_without_losing_internal_structure() {
     );
 
     let empty_body = CommitDraft::new(
-        "feat".to_owned(),
+        Some("feat".to_owned()),
         None,
         false,
         "add import".to_owned(),
@@ -281,7 +314,7 @@ fn normalizes_multiline_sections_without_losing_internal_structure() {
 #[test]
 fn canonicalizes_both_breaking_footer_tokens_and_allows_header_marker() {
     let draft = CommitDraft::new(
-        "feat".to_owned(),
+        Some("feat".to_owned()),
         None,
         true,
         "replace configuration".to_owned(),
@@ -306,7 +339,7 @@ fn canonicalizes_both_breaking_footer_tokens_and_allows_header_marker() {
 #[test]
 fn allows_repeatable_trailers_but_rejects_invalid_or_duplicate_breaking_footers() {
     let repeated = CommitDraft::new(
-        "docs".to_owned(),
+        Some("docs".to_owned()),
         None,
         false,
         "credit contributors".to_owned(),
@@ -320,7 +353,7 @@ fn allows_repeatable_trailers_but_rejects_invalid_or_duplicate_breaking_footers(
     assert!(repeated.validate().is_ok());
 
     let invalid = CommitDraft::new(
-        "feat".to_owned(),
+        Some("feat".to_owned()),
         None,
         false,
         "change API".to_owned(),

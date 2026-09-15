@@ -12,7 +12,7 @@ use serde::Deserialize;
 use crate::commit::{Capitalization, IssueStyle, MessagePolicy, TerminalPunctuation};
 
 #[doc(inline)]
-pub use crate::settings::UiSections;
+pub use crate::settings::{AccentColor, UiSections};
 
 const SCHEMA_VERSION: u32 = 1;
 
@@ -21,6 +21,7 @@ const SCHEMA_VERSION: u32 = 1;
 pub struct Config {
     pub ui: UiPreferences,
     pub message: MessagePolicy,
+    pub defaults: ComposerDefaultCommands,
 }
 
 /// User-interface preferences, which are intentionally global only.
@@ -28,6 +29,7 @@ pub struct Config {
 pub struct UiPreferences {
     pub sign: bool,
     pub sections: UiSections,
+    pub accent_color: AccentColor,
 }
 
 impl Default for UiPreferences {
@@ -35,6 +37,7 @@ impl Default for UiPreferences {
         Self {
             sign: true,
             sections: UiSections::default(),
+            accent_color: AccentColor::default(),
         }
     }
 }
@@ -45,6 +48,7 @@ struct GlobalFile {
     schema_version: Option<u32>,
     ui: Option<UiPreferencesPatch>,
     message: Option<MessagePolicyPatch>,
+    defaults: Option<ComposerDefaultCommands>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -54,20 +58,44 @@ struct RepositoryFile {
     message: Option<MessagePolicyPatch>,
 }
 
+/// Global-only commands used to prefill editable composer fields.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ComposerDefaultCommands {
+    #[serde(rename = "type")]
+    pub commit_type: Option<DefaultCommand>,
+    pub scope: Option<DefaultCommand>,
+    pub body: Option<DefaultCommand>,
+    pub issue: Option<DefaultCommand>,
+}
+
+/// An executable followed by literal arguments. No shell parsing is performed.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DefaultCommand {
+    pub command: Vec<String>,
+}
+
 #[derive(Debug, Deserialize, Default)]
 #[serde(default, deny_unknown_fields)]
 struct UiPreferencesPatch {
     sign: Option<bool>,
     sections: Option<UiSectionsPatch>,
+    accent_color: Option<AccentColor>,
 }
 
 #[derive(Debug, Deserialize, Default)]
 #[serde(default, deny_unknown_fields)]
 struct UiSectionsPatch {
+    #[serde(rename = "type")]
+    commit_type: Option<bool>,
+    scope: Option<bool>,
+    breaking: Option<bool>,
     staged_changes: Option<bool>,
     body: Option<bool>,
     footers: Option<bool>,
     issue: Option<bool>,
+    sign: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -77,6 +105,7 @@ struct MessagePolicyPatch {
     scope_suggestions: Option<Vec<String>>,
     subject: Option<SubjectPolicyPatch>,
     issue: Option<IssuePolicyPatch>,
+    format: Option<MessageFormatPatch>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -156,13 +185,16 @@ fn parse_global(contents: &str, path: &Path) -> Result<GlobalFile> {
         )
     })?;
     match file.schema_version {
-        None if file.ui.is_none() && file.message.is_none() => Ok(file),
+        None if file.ui.is_none() && file.message.is_none() && file.defaults.is_none() => Ok(file),
         None => bail!(
             "global configuration file at {} uses schema fields but has no schema_version",
             path.display()
         ),
         Some(SCHEMA_VERSION) => {
             validate_message_patch(file.message.as_ref()).with_context(|| {
+                format!("invalid global configuration file at {}", path.display())
+            })?;
+            validate_default_commands(file.defaults.as_ref()).with_context(|| {
                 format!("invalid global configuration file at {}", path.display())
             })?;
             Ok(file)
@@ -246,6 +278,47 @@ fn validate_message_patch(patch: Option<&MessagePolicyPatch>) -> Result<()> {
     {
         bail!("message policy subject max_length must be greater than zero");
     }
+    if patch
+        .format
+        .as_ref()
+        .and_then(|format| format.separator.as_ref())
+        .is_some_and(|separator| {
+            separator.chars().count() > 8
+                || separator
+                    .chars()
+                    .any(|character| character.is_control() || character.is_whitespace())
+        })
+    {
+        bail!("message format separator must be at most 8 non-whitespace characters");
+    }
+    Ok(())
+}
+
+fn validate_default_commands(commands: Option<&ComposerDefaultCommands>) -> Result<()> {
+    let Some(commands) = commands else {
+        return Ok(());
+    };
+    for (field, command) in [
+        ("type", commands.commit_type.as_ref()),
+        ("scope", commands.scope.as_ref()),
+        ("body", commands.body.as_ref()),
+        ("issue", commands.issue.as_ref()),
+    ] {
+        let Some(command) = command else {
+            continue;
+        };
+        if command.command.is_empty() || command.command[0].trim().is_empty() {
+            bail!("defaults.{field}.command must contain an executable");
+        }
+        if command.command.len() > 64
+            || command
+                .command
+                .iter()
+                .any(|argument| argument.len() > 4096 || argument.contains('\0'))
+        {
+            bail!("defaults.{field}.command contains too many or invalid arguments");
+        }
+    }
     Ok(())
 }
 
@@ -255,6 +328,20 @@ fn merge_global(config: &mut Config, file: GlobalFile) {
     }
     if let Some(message) = file.message {
         merge_message(&mut config.message, message);
+    }
+    if let Some(defaults) = file.defaults {
+        if defaults.commit_type.is_some() {
+            config.defaults.commit_type = defaults.commit_type;
+        }
+        if defaults.scope.is_some() {
+            config.defaults.scope = defaults.scope;
+        }
+        if defaults.body.is_some() {
+            config.defaults.body = defaults.body;
+        }
+        if defaults.issue.is_some() {
+            config.defaults.issue = defaults.issue;
+        }
     }
 }
 
@@ -268,7 +355,19 @@ fn merge_ui(ui: &mut UiPreferences, patch: UiPreferencesPatch) {
     if let Some(sign) = patch.sign {
         ui.sign = sign;
     }
+    if let Some(accent_color) = patch.accent_color {
+        ui.accent_color = accent_color;
+    }
     if let Some(sections) = patch.sections {
+        if let Some(commit_type) = sections.commit_type {
+            ui.sections.commit_type = commit_type;
+        }
+        if let Some(scope) = sections.scope {
+            ui.sections.scope = scope;
+        }
+        if let Some(breaking) = sections.breaking {
+            ui.sections.breaking = breaking;
+        }
         if let Some(staged_changes) = sections.staged_changes {
             ui.sections.staged_changes = staged_changes;
         }
@@ -281,7 +380,16 @@ fn merge_ui(ui: &mut UiPreferences, patch: UiPreferencesPatch) {
         if let Some(issue) = sections.issue {
             ui.sections.issue = issue;
         }
+        if let Some(sign) = sections.sign {
+            ui.sections.sign = sign;
+        }
     }
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+struct MessageFormatPatch {
+    separator: Option<String>,
 }
 
 fn merge_message(message: &mut MessagePolicy, patch: MessagePolicyPatch) {
@@ -310,6 +418,11 @@ fn merge_message(message: &mut MessagePolicy, patch: MessagePolicyPatch) {
         if let Some(style) = issue.style {
             message.issue.style = style;
         }
+    }
+    if let Some(format) = patch.format
+        && let Some(separator) = format.separator
+    {
+        message.format.separator = separator;
     }
 }
 
