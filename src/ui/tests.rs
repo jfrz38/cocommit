@@ -2,9 +2,9 @@ use super::*;
 use crate::{
     app::{AppEvent, Edit, Focus},
     commit::{Capitalization, MessagePolicy, SubjectPolicy, TerminalPunctuation},
-    settings::UiSections,
+    settings::{AccentColor, UiSections},
 };
-use ratatui::{Terminal, backend::TestBackend};
+use ratatui::{Terminal, backend::TestBackend, style::Color};
 use tui_input::Input;
 
 fn focus(app: &mut App, target: Focus) {
@@ -55,6 +55,20 @@ fn renders_form_at_normal_terminal_size() {
 }
 
 #[test]
+fn configured_accent_colors_the_focused_control() {
+    let app = App::new(false).with_accent_color(AccentColor::Magenta);
+    let backend = TestBackend::new(100, 40);
+    let mut terminal = Terminal::new(backend).expect("test terminal should initialize");
+    terminal
+        .draw(|frame| {
+            let _ = render(frame, &app);
+        })
+        .expect("rendering should not fail");
+
+    assert_eq!(terminal.backend().buffer()[(1, 1)].fg, Color::Magenta);
+}
+
+#[test]
 fn footer_hint_always_describes_space_as_toggle() {
     assert_eq!(
         components::footer_hint(),
@@ -69,6 +83,7 @@ fn hidden_sections_consume_no_space_or_expose_actions() {
         body: false,
         footers: false,
         issue: false,
+        ..UiSections::default()
     });
     app.handle(crate::app::AppEvent::Help);
 
@@ -91,25 +106,65 @@ fn hidden_sections_consume_no_space_or_expose_actions() {
 }
 
 #[test]
-fn all_hidden_sections_use_compact_layout_at_expanded_cutoff() {
+fn default_sections_use_expanded_layout_at_exact_minimum_height() {
+    let app = App::new(false);
+
+    assert!(rendered(&app, 50, 38).contains("Subject"));
+    assert!(rendered(&app, 50, 39).contains("Subject"));
+}
+
+#[test]
+fn status_is_included_in_expanded_minimum_height() {
+    let mut app = App::new(false);
+    focus(&mut app, Focus::Submit);
+    assert_eq!(
+        app.handle(AppEvent::Submit),
+        crate::app::AppAction::Continue
+    );
+
+    assert!(rendered(&app, 50, 41).contains("Subject"));
+    assert!(rendered(&app, 50, 42).contains("Subject"));
+}
+
+#[test]
+fn hidden_sections_lower_expanded_minimum_height() {
     let mut app = App::new(false).with_sections(UiSections {
         staged_changes: false,
         body: false,
         footers: false,
         issue: false,
+        ..UiSections::default()
     });
     focus(&mut app, Focus::Submit);
 
-    let output = rendered(&app, 50, 24);
-
-    assert!(output.contains("Sign commit [ ]"));
-    assert!(output.contains("Preview    scroll 0"));
-    assert!(output.contains("[ Commit ]"));
+    assert!(rendered(&app, 50, 23).contains("Subject"));
+    assert!(rendered(&app, 50, 24).contains("Subject"));
 }
 
 #[test]
 fn each_hidden_section_is_absent_in_both_layouts() {
     for (sections, hidden_label) in [
+        (
+            UiSections {
+                commit_type: false,
+                ..UiSections::default()
+            },
+            "Type",
+        ),
+        (
+            UiSections {
+                scope: false,
+                ..UiSections::default()
+            },
+            "Scope",
+        ),
+        (
+            UiSections {
+                breaking: false,
+                ..UiSections::default()
+            },
+            "Breaking",
+        ),
         (
             UiSections {
                 staged_changes: false,
@@ -138,6 +193,13 @@ fn each_hidden_section_is_absent_in_both_layouts() {
             },
             "Issue",
         ),
+        (
+            UiSections {
+                sign: false,
+                ..UiSections::default()
+            },
+            "Sign commit",
+        ),
     ] {
         let app = App::new(false).with_sections(sections);
         for (width, height) in [(100, 40), (40, 12)] {
@@ -157,6 +219,7 @@ fn renders_every_section_combination_in_expanded_and_compact_layouts() {
             body: flags & 2 != 0,
             footers: flags & 4 != 0,
             issue: flags & 8 != 0,
+            ..UiSections::default()
         });
         draw(&app, 100, 40);
         draw(&app, 40, 12);
@@ -200,7 +263,7 @@ fn renders_error_only_after_validation_fails() {
     app.handle(AppEvent::Submit);
     let output = rendered(&app, 100, 40);
     assert!(output.contains("Error"));
-    assert!(output.contains("Message is required"));
+    assert!(output.contains("Subject is required"));
 }
 
 #[test]
@@ -216,7 +279,7 @@ fn renders_input_feedback_before_validation_feedback() {
 
     let output = rendered(&app, 100, 40);
     assert!(output.contains("Field is too long"));
-    assert!(!output.contains("Message is required"));
+    assert!(!output.contains("Subject is required"));
 }
 
 #[test]
@@ -233,7 +296,29 @@ fn renders_subject_indicator_for_the_active_policy() {
     enter_text(&mut app, Focus::Message, "add footer editor");
 
     let output = rendered(&app, 100, 40);
-    assert!(output.contains("Subject 17/72; lowercase; no terminal punctuation"));
+    assert!(output.contains("Subject (17/72); lowercase; no terminal punctuation"));
+}
+
+#[test]
+fn subject_indicator_only_shows_a_counter_when_it_is_useful() {
+    let unrestricted = SubjectPolicy::default();
+    let limited = SubjectPolicy {
+        max_length: Some(72),
+        ..SubjectPolicy::default()
+    };
+
+    assert_eq!(
+        components::subject_indicator(&tui_input::Input::default(), &unrestricted),
+        "Subject"
+    );
+    assert_eq!(
+        components::subject_indicator(&tui_input::Input::new("fix bug".to_owned()), &unrestricted),
+        "Subject (7 chars)"
+    );
+    assert_eq!(
+        components::subject_indicator(&tui_input::Input::default(), &limited),
+        "Subject (0/72)"
+    );
 }
 
 #[test]

@@ -13,13 +13,13 @@ pub(super) fn render_footers(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .borders(Borders::ALL)
         .title(" Footers (A add, Enter edit, Delete remove, Ctrl+Up/Down reorder) ")
-        .border_style(focused_style(focused));
+        .border_style(focused_style(focused, app.accent_color()));
     let inner = block.inner(area);
     frame.render_widget(block, area);
     if app.form().footers.is_empty() {
         frame.render_widget(
             Paragraph::new("No footers. A adds one; Space adds BREAKING CHANGE.")
-                .style(focused_style(focused))
+                .style(focused_style(focused, app.accent_color()))
                 .wrap(Wrap { trim: false }),
             inner,
         );
@@ -36,7 +36,7 @@ pub(super) fn render_footers(frame: &mut Frame, area: Rect, app: &App) {
             ))
         }))
         .highlight_symbol("> ")
-        .highlight_style(focused_style(focused)),
+        .highlight_style(focused_style(focused, app.accent_color())),
         inner,
         &mut state,
     );
@@ -47,7 +47,7 @@ pub(super) fn render_staged_changes(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .borders(Borders::ALL)
         .title(" Staged changes ")
-        .border_style(focused_style(focused));
+        .border_style(focused_style(focused, app.accent_color()));
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -66,7 +66,7 @@ pub(super) fn render_staged_changes(frame: &mut Frame, area: Rect, app: &App) {
     );
     let summary_area = Rect::new(inner.x, inner.y, inner.width, inner.height.min(1));
     frame.render_widget(
-        Paragraph::new(summary).style(focused_style(focused)),
+        Paragraph::new(summary).style(focused_style(focused, app.accent_color())),
         summary_area,
     );
 
@@ -100,7 +100,7 @@ pub(super) fn render_staged_changes(frame: &mut Frame, area: Rect, app: &App) {
         })
         .collect::<Vec<_>>();
     frame.render_widget(
-        List::new(items).style(focused_style(focused)),
+        List::new(items).style(focused_style(focused, app.accent_color())),
         Rect::new(
             inner.x,
             inner.y.saturating_add(1),
