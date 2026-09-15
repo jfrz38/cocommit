@@ -7,6 +7,8 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthChar;
 
+use crate::settings::AccentColor;
+
 use super::components::{centered_rect, focused_style};
 
 pub(super) fn render_preview(
@@ -15,6 +17,7 @@ pub(super) fn render_preview(
     preview: &str,
     focused: bool,
     scroll: u16,
+    accent_color: AccentColor,
 ) -> u16 {
     let content = Block::default().borders(Borders::ALL).inner(area);
     let viewport = preview_viewport(preview, content, scroll);
@@ -33,7 +36,7 @@ pub(super) fn render_preview(
                             ""
                         }
                     ))
-                    .border_style(focused_style(focused)),
+                    .border_style(focused_style(focused, accent_color)),
             )
             .scroll((viewport.scroll, 0))
             .wrap(Wrap { trim: false }),
@@ -47,13 +50,14 @@ pub(super) fn render_preview_expanded(
     area: Rect,
     preview: &str,
     scroll: u16,
+    accent_color: AccentColor,
 ) -> u16 {
     let popup = centered_rect(area, 90, 85);
     frame.render_widget(Clear, popup);
     let block = Block::default()
         .borders(Borders::ALL)
         .title(" Preview ")
-        .border_style(focused_style(true));
+        .border_style(focused_style(true, accent_color));
     let inner = block.inner(popup);
     frame.render_widget(block, popup);
     let rows = Layout::default()

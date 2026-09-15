@@ -22,9 +22,9 @@ impl FormState {
     /// Projects the editable fields into a normalized draft with the visible sections.
     pub(super) fn project(&self, sections: UiSections, issue: Option<u64>) -> CommitDraft {
         CommitDraft::new(
-            self.commit_type.to_string(),
-            Some(self.scope.to_string()),
-            self.breaking,
+            sections.commit_type.then(|| self.commit_type.to_string()),
+            (sections.commit_type && sections.scope).then(|| self.scope.to_string()),
+            sections.commit_type && sections.breaking && self.breaking,
             self.message.to_string(),
             issue,
             sections.body.then(|| self.body.to_string()),

@@ -1,6 +1,6 @@
 [package]
 name = "cocommit"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.94.1"
 description = "A keyboard-driven terminal UI for creating Conventional Commits"
@@ -22,7 +22,7 @@ include = [
 [dependencies]
 anyhow = "1"
 crossterm = "0.29"
-dirs = "6"
+dirs = "7"
 ratatui = "0.30"
 serde = { version = "1", features = ["derive"] }
 toml = "1"

@@ -4,7 +4,7 @@ use tui_input::{Input, InputRequest};
 
 use crate::{
     commit::{CommitDraft, MessagePolicy, SubjectPolicy, ValidationError},
-    settings::UiSections,
+    settings::{AccentColor, ComposerDefaults, UiSections},
     staging::{StagedChanges, StagedFile},
 };
 
@@ -113,6 +113,7 @@ pub struct App {
     mode: Mode,
     sign: bool,
     sections: UiSections,
+    accent_color: AccentColor,
     staged_selection: StagedSelection,
     footer_selected: usize,
     preview_state: PreviewState,
@@ -153,6 +154,7 @@ impl App {
             mode: Mode::Form,
             sign,
             sections: UiSections::default(),
+            accent_color: AccentColor::default(),
             staged_selection: StagedSelection::default(),
             footer_selected: 0,
             preview_state: PreviewState::default(),
@@ -163,15 +165,30 @@ impl App {
 
     pub fn with_message_policy(mut self, policy: &MessagePolicy) -> Self {
         self.message_policy = policy.clone();
-        if policy.types_are_restricted && !policy.types.contains(&self.form.commit_type.to_string())
+        if self.sections.commit_type
+            && policy.types_are_restricted
+            && !policy.types.contains(&self.form.commit_type.to_string())
         {
             self.form.commit_type = Input::new(policy.types.first().cloned().unwrap_or_default());
         }
         self
     }
 
-    pub fn with_sections(mut self, sections: UiSections) -> Self {
+    pub fn with_sections(mut self, mut sections: UiSections) -> Self {
+        if !sections.commit_type {
+            sections.scope = false;
+            sections.breaking = false;
+        }
         self.sections = sections;
+        if !sections.commit_type {
+            self.form.commit_type = Input::default();
+        }
+        if !sections.scope {
+            self.form.scope = Input::default();
+        }
+        if !sections.breaking {
+            self.form.breaking = false;
+        }
         if !sections.body {
             self.form.body = Input::default();
         }
@@ -183,6 +200,35 @@ impl App {
         }
         self.staged_selection.set_enabled(sections.staged_changes);
         self.ensure_visible_focus();
+        self
+    }
+
+    pub fn with_accent_color(mut self, accent_color: AccentColor) -> Self {
+        self.accent_color = accent_color;
+        self
+    }
+
+    pub fn with_defaults(mut self, defaults: &ComposerDefaults) -> Self {
+        if self.sections.commit_type
+            && let Some(commit_type) = &defaults.commit_type
+        {
+            self.form.commit_type = Input::new(commit_type.clone());
+        }
+        if self.sections.scope
+            && let Some(scope) = &defaults.scope
+        {
+            self.form.scope = Input::new(scope.clone());
+        }
+        if self.sections.body
+            && let Some(body) = &defaults.body
+        {
+            self.form.body = Input::new(body.clone());
+        }
+        if self.sections.issue
+            && let Some(issue) = &defaults.issue
+        {
+            self.form.issue = Input::new(issue.clone());
+        }
         self
     }
 
@@ -206,6 +252,10 @@ impl App {
         self.sections
     }
 
+    pub fn accent_color(&self) -> AccentColor {
+        self.accent_color
+    }
+
     pub fn footer_selected(&self) -> usize {
         self.footer_selected
     }
@@ -220,14 +270,14 @@ impl App {
 
     pub fn visible_focuses(&self) -> Vec<Focus> {
         [
-            Some(Focus::CommitType),
-            Some(Focus::Scope),
-            Some(Focus::Breaking),
+            self.sections.commit_type.then_some(Focus::CommitType),
+            self.sections.scope.then_some(Focus::Scope),
+            self.sections.breaking.then_some(Focus::Breaking),
             Some(Focus::Message),
             self.sections.body.then_some(Focus::Body),
             self.sections.footers.then_some(Focus::Footers),
             self.sections.issue.then_some(Focus::Issue),
-            Some(Focus::Sign),
+            self.sections.sign.then_some(Focus::Sign),
             self.sections.staged_changes.then_some(Focus::StagedChanges),
             Some(Focus::Preview),
             Some(Focus::Submit),

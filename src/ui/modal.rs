@@ -1,14 +1,17 @@
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Position, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
 use tui_input::Input;
 
-use crate::app::{
-    App, FooterEditorFocus, FooterEditorState, FooterNamePickerState, Mode, TypeChoice,
-    TypePickerState,
+use crate::{
+    app::{
+        App, FooterEditorFocus, FooterEditorState, FooterNamePickerState, Mode, TypeChoice,
+        TypePickerState,
+    },
+    settings::AccentColor,
 };
 
 use super::{
@@ -30,10 +33,10 @@ pub(super) fn render(
         cursor = render_scope_picker(frame, area, app, picker);
     }
     if let Mode::FooterNamePicker(picker) = app.mode() {
-        cursor = render_footer_name_picker(frame, area, picker);
+        cursor = render_footer_name_picker(frame, area, picker, app.accent_color());
     }
     if let Mode::FooterEditor(editor) = app.mode() {
-        cursor = render_footer_editor(frame, area, editor);
+        cursor = render_footer_editor(frame, area, editor, app.accent_color());
     }
     let expanded_preview_limit = if matches!(app.mode(), Mode::PreviewExpanded) {
         Some(render_preview_expanded(
@@ -41,6 +44,7 @@ pub(super) fn render(
             area,
             &app.preview(),
             app.preview_state().scroll,
+            app.accent_color(),
         ))
     } else {
         None
@@ -68,6 +72,7 @@ fn render_picker(
         &picker.query,
         picker.highlighted,
         app.type_choices(picker),
+        app.accent_color(),
     )
 }
 
@@ -84,6 +89,7 @@ fn render_scope_picker(
         &picker.query,
         picker.highlighted,
         app.scope_choices(picker),
+        app.accent_color(),
     )
 }
 
@@ -91,6 +97,7 @@ fn render_footer_name_picker(
     frame: &mut Frame,
     area: Rect,
     picker: &FooterNamePickerState,
+    accent_color: AccentColor,
 ) -> Option<Position> {
     render_choice_picker(
         frame,
@@ -99,6 +106,7 @@ fn render_footer_name_picker(
         &picker.query,
         picker.highlighted,
         picker.choices(),
+        accent_color,
     )
 }
 
@@ -109,6 +117,7 @@ fn render_choice_picker(
     query: &Input,
     highlighted: usize,
     choices: Vec<TypeChoice>,
+    accent_color: AccentColor,
 ) -> Option<Position> {
     let width = area.width.saturating_sub(4).min(60);
     let height = area.height.saturating_sub(2).min(18);
@@ -123,7 +132,7 @@ fn render_choice_picker(
     let block = Block::default()
         .borders(Borders::ALL)
         .title(title)
-        .border_style(focused_style(true));
+        .border_style(focused_style(true, accent_color));
     let inner = block.inner(popup);
     frame.render_widget(block, popup);
     let chunks = Layout::default()
@@ -147,9 +156,8 @@ fn render_choice_picker(
     frame.render_stateful_widget(
         List::new(items).highlight_style(
             Style::default()
-                .fg(Color::Black)
-                .bg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
+                .fg(super::components::accent_to_ratatui(accent_color))
+                .add_modifier(Modifier::BOLD | Modifier::REVERSED),
         ),
         chunks[1],
         &mut state,
@@ -166,6 +174,7 @@ fn render_footer_editor(
     frame: &mut Frame,
     area: Rect,
     editor: &FooterEditorState,
+    accent_color: AccentColor,
 ) -> Option<Position> {
     let width = area.width.saturating_sub(4).min(70);
     let height = area.height.saturating_sub(2).min(18);
@@ -179,7 +188,7 @@ fn render_footer_editor(
     let block = Block::default()
         .borders(Borders::ALL)
         .title(" Footer editor ")
-        .border_style(focused_style(true));
+        .border_style(focused_style(true, accent_color));
     let inner = block.inner(popup);
     frame.render_widget(block, popup);
     let rows = Layout::default()
@@ -196,6 +205,7 @@ fn render_footer_editor(
         "Footer name",
         &editor.token,
         editor.focus == FooterEditorFocus::Name,
+        accent_color,
     );
     cursor = cursor.or(render_text_row(
         frame,
@@ -203,12 +213,14 @@ fn render_footer_editor(
         "Value (Enter newline)",
         &editor.value,
         editor.focus == FooterEditorFocus::Value,
+        accent_color,
     ));
     render_action_row(
         frame,
         rows[2],
         "Save footer",
         editor.focus == FooterEditorFocus::Save,
+        accent_color,
     );
     cursor
 }

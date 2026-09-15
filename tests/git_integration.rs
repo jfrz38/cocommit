@@ -46,7 +46,7 @@ fn creates_an_unsigned_commit_in_a_temporary_repository() {
     run_git(repository.path(), ["add", "staged.txt"]);
 
     let message = cocommit::commit::CommitDraft::new(
-        "feat".to_owned(),
+        Some("feat".to_owned()),
         None,
         false,
         "verify Git integration".to_owned(),

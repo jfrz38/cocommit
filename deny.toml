@@ -2,7 +2,6 @@
 # Additions require an ADR or a dated, crate-specific exception below.
 
 [advisories]
-db-path = "target/advisory-db"
 db-urls = ["https://github.com/RustSec/advisory-db"]
 unmaintained = "workspace"
 yanked = "deny"

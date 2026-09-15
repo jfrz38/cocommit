@@ -3,13 +3,14 @@
 pub mod policy;
 
 pub use policy::{
-    Capitalization, IssuePolicy, IssueStyle, MessagePolicy, SubjectPolicy, TerminalPunctuation,
+    Capitalization, IssuePolicy, IssueStyle, MessageFormat, MessagePolicy, SubjectPolicy,
+    TerminalPunctuation,
 };
 
 /// A normalized Conventional Commit message ready to render or submit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitDraft {
-    pub commit_type: String,
+    pub commit_type: Option<String>,
     pub scope: Option<String>,
     pub breaking: bool,
     pub message: String,
@@ -83,7 +84,7 @@ pub struct ValidationError {
 impl CommitDraft {
     /// Creates a normalized draft from already parsed values.
     pub fn new(
-        commit_type: String,
+        commit_type: Option<String>,
         scope: Option<String>,
         breaking: bool,
         message: String,
@@ -92,7 +93,7 @@ impl CommitDraft {
         footers: Vec<Footer>,
     ) -> Self {
         Self {
-            commit_type: normalize(&commit_type),
+            commit_type: commit_type.map(|commit_type| normalize(&commit_type)),
             scope: scope.and_then(|scope| non_empty_normalized(&scope)),
             breaking,
             message: normalize(&message),
@@ -104,7 +105,7 @@ impl CommitDraft {
 
     /// Creates a draft from the form's raw text values.
     pub fn from_raw(
-        commit_type: String,
+        commit_type: Option<String>,
         scope: Option<String>,
         breaking: bool,
         message: String,
@@ -158,19 +159,20 @@ impl CommitDraft {
 
     /// Renders the message using the effective repository policy.
     pub fn render_message_with_policy(&self, policy: &MessagePolicy) -> String {
-        let mut message = self.commit_type.clone();
-
-        if let Some(scope) = &self.scope {
-            message.push('(');
-            message.push_str(scope);
-            message.push(')');
+        let mut message = String::new();
+        if let Some(commit_type) = &self.commit_type {
+            message.push_str(commit_type);
+            if let Some(scope) = &self.scope {
+                message.push('(');
+                message.push_str(scope);
+                message.push(')');
+            }
+            if self.breaking {
+                message.push('!');
+            }
+            message.push_str(&policy.format.separator);
+            message.push(' ');
         }
-
-        if self.breaking {
-            message.push('!');
-        }
-
-        message.push_str(": ");
         message.push_str(&self.message);
 
         if let Some(issue) = self.issue {
@@ -206,35 +208,36 @@ impl CommitDraft {
     pub fn validate_with_policy(&self, policy: &MessagePolicy) -> Result<(), Vec<ValidationError>> {
         let mut errors = Vec::new();
 
-        if normalize(&self.commit_type).is_empty() {
-            errors.push(validation_error(
-                DraftField::CommitType,
-                ValidationErrorKind::Required,
-            ));
-        } else if contains_line_break(&self.commit_type) {
-            errors.push(validation_error(
-                DraftField::CommitType,
-                ValidationErrorKind::MustBeSingleLine,
-            ));
-        } else if self.commit_type.chars().any(char::is_whitespace) {
-            errors.push(validation_error(
-                DraftField::CommitType,
-                ValidationErrorKind::ContainsWhitespace,
-            ));
-        } else if self
-            .commit_type
-            .chars()
-            .any(|character| matches!(character, '(' | ')' | '!' | ':'))
-        {
-            errors.push(validation_error(
-                DraftField::CommitType,
-                ValidationErrorKind::ContainsForbiddenCharacter,
-            ));
-        } else if policy.types_are_restricted && !policy.types.contains(&self.commit_type) {
-            errors.push(validation_error(
-                DraftField::CommitType,
-                ValidationErrorKind::NotAllowed,
-            ));
+        if let Some(commit_type) = &self.commit_type {
+            if commit_type.is_empty() {
+                errors.push(validation_error(
+                    DraftField::CommitType,
+                    ValidationErrorKind::Required,
+                ));
+            } else if contains_line_break(commit_type) {
+                errors.push(validation_error(
+                    DraftField::CommitType,
+                    ValidationErrorKind::MustBeSingleLine,
+                ));
+            } else if commit_type.chars().any(char::is_whitespace) {
+                errors.push(validation_error(
+                    DraftField::CommitType,
+                    ValidationErrorKind::ContainsWhitespace,
+                ));
+            } else if commit_type
+                .chars()
+                .any(|character| matches!(character, '(' | ')' | '!' | ':'))
+            {
+                errors.push(validation_error(
+                    DraftField::CommitType,
+                    ValidationErrorKind::ContainsForbiddenCharacter,
+                ));
+            } else if policy.types_are_restricted && !policy.types.contains(commit_type) {
+                errors.push(validation_error(
+                    DraftField::CommitType,
+                    ValidationErrorKind::NotAllowed,
+                ));
+            }
         }
 
         if let Some(scope) = &self.scope {

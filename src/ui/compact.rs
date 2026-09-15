@@ -68,6 +68,7 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollL
         &app.preview(),
         app.focus() == Focus::Preview,
         app.preview_state().scroll,
+        app.accent_color(),
     );
     if let Some((message, is_error)) = status {
         let status = if is_error {
@@ -118,7 +119,7 @@ fn render_row(frame: &mut Frame, area: Rect, app: &App, focus: Focus) -> Option<
             app.focus() == focus,
         ),
         Focus::Message => (
-            "Message",
+            "Subject",
             Some(&app.form().message),
             None,
             app.focus() == focus,
@@ -131,7 +132,7 @@ fn render_row(frame: &mut Frame, area: Rect, app: &App, focus: Focus) -> Option<
         Focus::Preview => ("Preview", None, None, app.focus() == focus),
         Focus::Submit => ("", None, None, app.focus() == focus),
     };
-    let style = focused_style(focused);
+    let style = focused_style(focused, app.accent_color());
     let staged_position = if app.staged_changes().files.is_empty() {
         0
     } else {

@@ -17,13 +17,35 @@ use super::{
     staged::{render_footers, render_staged_changes},
 };
 
+pub(super) fn minimum_height(app: &App) -> u16 {
+    let sections = app.sections();
+    2 // Outer border.
+        + u16::from(sections.commit_type) * 3
+        + u16::from(sections.scope) * 3
+        + u16::from(sections.breaking) * 3
+        + 3 // Subject.
+        + u16::from(sections.body) * 4
+        + u16::from(sections.footers) * 4
+        + u16::from(sections.issue) * 3
+        + u16::from(sections.sign) * 3
+        + u16::from(sections.staged_changes) * 4
+        + 3 // Preview.
+        + 3 // Submit.
+        + u16::from(status_for(app).is_some()) * 3
+        + 1 // Footer.
+}
+
 pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLimits {
     let outer = Block::default().borders(Borders::ALL).title(" cocommit ");
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
 
     let sections = app.sections();
-    let omitted_form_height = u16::from(!sections.body) * 4
+    let omitted_form_height = u16::from(!sections.commit_type) * 3
+        + u16::from(!sections.scope) * 3
+        + u16::from(!sections.breaking) * 3
+        + u16::from(!sections.sign) * 3
+        + u16::from(!sections.body) * 4
         + u16::from(!sections.footers) * 4
         + u16::from(!sections.issue) * 3;
     let staged_height = sections.staged_changes.then(|| {
@@ -40,12 +62,17 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollL
                 + 3 * u16::from(status_for(app).is_some()),
         )
         .max(3);
-    let mut constraints = vec![
-        Constraint::Length(3),
-        Constraint::Length(3),
-        Constraint::Length(3),
-        Constraint::Length(3),
-    ];
+    let mut constraints = Vec::new();
+    for visible in [
+        sections.commit_type,
+        sections.scope,
+        sections.breaking,
+        true,
+    ] {
+        if visible {
+            constraints.push(Constraint::Length(3));
+        }
+    }
     if sections.body {
         constraints.push(Constraint::Length(4));
     }
@@ -55,7 +82,9 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollL
     if sections.issue {
         constraints.push(Constraint::Length(3));
     }
-    constraints.push(Constraint::Length(3));
+    if sections.sign {
+        constraints.push(Constraint::Length(3));
+    }
     if let Some(staged_height) = staged_height {
         constraints.push(Constraint::Length(staged_height));
     }
@@ -71,35 +100,49 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollL
         .split(inner);
 
     let mut cursor = None;
+    let mut row = 0;
+    if sections.commit_type {
+        cursor = cursor.or(render_text_row(
+            frame,
+            rows[row],
+            "Type",
+            &app.form().commit_type,
+            app.focus() == Focus::CommitType && matches!(app.mode(), Mode::Form),
+            app.accent_color(),
+        ));
+        row += 1;
+    }
+    if sections.scope {
+        cursor = cursor.or(render_text_row(
+            frame,
+            rows[row],
+            scope_label(app.has_scope_suggestions()),
+            &app.form().scope,
+            app.focus() == Focus::Scope,
+            app.accent_color(),
+        ));
+        row += 1;
+    }
+    if sections.breaking {
+        render_toggle_row(
+            frame,
+            rows[row],
+            "Breaking",
+            app.form().breaking,
+            app.focus() == Focus::Breaking,
+            app.accent_color(),
+        );
+        row += 1;
+    }
     cursor = cursor.or(render_text_row(
         frame,
-        rows[0],
-        "Type",
-        &app.form().commit_type,
-        app.focus() == Focus::CommitType && matches!(app.mode(), Mode::Form),
-    ));
-    cursor = cursor.or(render_text_row(
-        frame,
-        rows[1],
-        scope_label(app.has_scope_suggestions()),
-        &app.form().scope,
-        app.focus() == Focus::Scope,
-    ));
-    render_toggle_row(
-        frame,
-        rows[2],
-        "Breaking",
-        app.form().breaking,
-        app.focus() == Focus::Breaking,
-    );
-    cursor = cursor.or(render_text_row(
-        frame,
-        rows[3],
+        rows[row],
         &subject_indicator(&app.form().message, app.subject_policy()),
         &app.form().message,
         app.focus() == Focus::Message,
+        app.accent_color(),
     ));
-    let mut row = 4;
+    row += 1;
     if sections.body {
         cursor = cursor.or(render_text_row(
             frame,
@@ -107,6 +150,7 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollL
             "Body",
             &app.form().body,
             app.focus() == Focus::Body,
+            app.accent_color(),
         ));
         row += 1;
     }
@@ -121,17 +165,21 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollL
             "Issue",
             &app.form().issue,
             app.focus() == Focus::Issue,
+            app.accent_color(),
         ));
         row += 1;
     }
-    render_toggle_row(
-        frame,
-        rows[row],
-        "Sign commit",
-        app.sign(),
-        app.focus() == Focus::Sign,
-    );
-    row += 1;
+    if sections.sign {
+        render_toggle_row(
+            frame,
+            rows[row],
+            "Sign commit",
+            app.sign(),
+            app.focus() == Focus::Sign,
+            app.accent_color(),
+        );
+        row += 1;
+    }
     if sections.staged_changes {
         render_staged_changes(frame, rows[row], app);
         row += 1;
@@ -142,9 +190,15 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollL
         &app.preview(),
         app.focus() == Focus::Preview,
         app.preview_state().scroll,
+        app.accent_color(),
     );
     row += 1;
-    render_submit_row(frame, rows[row], app.focus() == Focus::Submit);
+    render_submit_row(
+        frame,
+        rows[row],
+        app.focus() == Focus::Submit,
+        app.accent_color(),
+    );
     row += 1;
     if let Some((status, is_error)) = status_for(app) {
         render_status(frame, rows[row], status, is_error);
