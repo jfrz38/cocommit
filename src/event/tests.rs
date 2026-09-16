@@ -77,6 +77,50 @@ fn maps_cancellation_navigation_and_editing() {
 }
 
 #[test]
+fn maps_character_and_word_cursor_navigation() {
+    let cases = [
+        (KeyCode::Left, KeyModifiers::NONE, Edit::PreviousChar),
+        (KeyCode::Right, KeyModifiers::NONE, Edit::NextChar),
+        (KeyCode::Left, KeyModifiers::CONTROL, Edit::PreviousWord),
+        (KeyCode::Right, KeyModifiers::CONTROL, Edit::NextWord),
+        (KeyCode::Left, KeyModifiers::ALT, Edit::PreviousWord),
+        (KeyCode::Right, KeyModifiers::ALT, Edit::NextWord),
+    ];
+
+    for (key, modifiers, edit) in cases {
+        assert_eq!(
+            map(Event::Key(KeyEvent::new(key, modifiers))),
+            Some(AppEvent::Edit(edit))
+        );
+    }
+}
+
+#[test]
+fn maps_word_deletion() {
+    let cases = [
+        (
+            KeyCode::Backspace,
+            KeyModifiers::CONTROL,
+            Edit::DeletePreviousWord,
+        ),
+        (
+            KeyCode::Backspace,
+            KeyModifiers::ALT,
+            Edit::DeletePreviousWord,
+        ),
+        (KeyCode::Delete, KeyModifiers::CONTROL, Edit::DeleteNextWord),
+        (KeyCode::Delete, KeyModifiers::ALT, Edit::DeleteNextWord),
+    ];
+
+    for (key, modifiers, edit) in cases {
+        assert_eq!(
+            map(Event::Key(KeyEvent::new(key, modifiers))),
+            Some(AppEvent::Edit(edit))
+        );
+    }
+}
+
+#[test]
 fn maps_paste_and_resize() {
     assert_eq!(
         map(Event::Paste("hello".to_owned())),

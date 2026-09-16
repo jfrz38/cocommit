@@ -39,6 +39,28 @@ fn map_key(key: KeyEvent) -> Option<AppEvent> {
         }
         (KeyCode::Up, _) => Some(AppEvent::Up),
         (KeyCode::Down, _) => Some(AppEvent::Down),
+        (KeyCode::Left, modifiers)
+            if modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+        {
+            Some(AppEvent::Edit(Edit::PreviousWord))
+        }
+        (KeyCode::Right, modifiers)
+            if modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+        {
+            Some(AppEvent::Edit(Edit::NextWord))
+        }
+        (KeyCode::Left, _) => Some(AppEvent::Edit(Edit::PreviousChar)),
+        (KeyCode::Right, _) => Some(AppEvent::Edit(Edit::NextChar)),
+        (KeyCode::Backspace, modifiers)
+            if modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+        {
+            Some(AppEvent::Edit(Edit::DeletePreviousWord))
+        }
+        (KeyCode::Delete, modifiers)
+            if modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+        {
+            Some(AppEvent::Edit(Edit::DeleteNextWord))
+        }
         (KeyCode::Backspace, _) => Some(AppEvent::Edit(Edit::Backspace)),
         (KeyCode::Delete, _) => Some(AppEvent::Edit(Edit::Delete)),
         (KeyCode::Home, _) => Some(AppEvent::Edit(Edit::Home)),

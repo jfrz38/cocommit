@@ -10,7 +10,7 @@ use super::components::focused_style;
 
 pub(super) fn render(frame: &mut Frame, area: Rect, app: &App) {
     let width = area.width.saturating_sub(4).min(64);
-    let height = area.height.saturating_sub(2).min(16);
+    let height = area.height.saturating_sub(2).min(18);
     let popup = Rect::new(
         area.x + (area.width - width) / 2,
         area.y + (area.height - height) / 2,
@@ -57,6 +57,8 @@ fn text(app: &App) -> String {
                 ""
             }
         ),
+        "Left / Right     Move cursor; Ctrl/Alt moves by word".to_owned(),
+        "Ctrl/Alt+Bksp/Del Delete previous / next word".to_owned(),
         format!(
             "Enter            {}{}open preview",
             if sections.commit_type {

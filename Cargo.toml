@@ -1,6 +1,6 @@
 [package]
 name = "cocommit"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version = "1.94.1"
 description = "A keyboard-driven terminal UI for creating Conventional Commits"

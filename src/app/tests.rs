@@ -676,6 +676,38 @@ fn unicode_input_counts_characters_instead_of_bytes() {
 }
 
 #[test]
+fn cursor_moves_by_character_and_word_in_text_fields() {
+    let mut app = App::new(false);
+    focus(&mut app, Focus::Message);
+    app.form.message = Input::new("one two".to_owned());
+
+    app.handle(AppEvent::Edit(Edit::PreviousChar));
+    assert_eq!(app.form.message.cursor(), 6);
+    app.handle(AppEvent::Edit(Edit::PreviousWord));
+    assert_eq!(app.form.message.cursor(), 4);
+    app.handle(AppEvent::Edit(Edit::NextChar));
+    assert_eq!(app.form.message.cursor(), 5);
+    app.handle(AppEvent::Edit(Edit::NextWord));
+    assert_eq!(app.form.message.cursor(), 7);
+}
+
+#[test]
+fn word_deletion_removes_text_before_and_after_the_cursor() {
+    let mut app = App::new(false);
+    focus(&mut app, Focus::Message);
+    app.form.message = Input::new("one two three".to_owned());
+
+    app.handle(AppEvent::Edit(Edit::DeletePreviousWord));
+    assert_eq!(app.form.message.to_string(), "one two ");
+    assert_eq!(app.form.message.cursor(), 8);
+
+    app.handle(AppEvent::Edit(Edit::Home));
+    app.handle(AppEvent::Edit(Edit::DeleteNextWord));
+    assert_eq!(app.form.message.to_string(), "two ");
+    assert_eq!(app.form.message.cursor(), 0);
+}
+
+#[test]
 fn cancel_actions_cancel_from_both_modes() {
     let mut app = App::new(false);
     assert_eq!(app.handle(AppEvent::Escape), AppAction::Cancel);
