@@ -23,17 +23,20 @@ fn maps_only_key_press_events() {
 }
 
 #[test]
+fn maps_submit_shortcuts() {
+    for key in [KeyCode::Char('s'), KeyCode::Enter] {
+        assert_eq!(
+            map(Event::Key(KeyEvent::new(key, KeyModifiers::CONTROL))),
+            Some(AppEvent::Submit)
+        );
+    }
+}
+
+#[test]
 fn maps_cancellation_navigation_and_editing() {
     assert_eq!(
         map(Event::Key(KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE))),
         Some(AppEvent::Help)
-    );
-    assert_eq!(
-        map(Event::Key(KeyEvent::new(
-            KeyCode::Enter,
-            KeyModifiers::CONTROL
-        ))),
-        Some(AppEvent::Submit)
     );
     assert_eq!(
         map(Event::Key(KeyEvent::new(

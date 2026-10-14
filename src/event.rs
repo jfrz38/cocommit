@@ -21,6 +21,9 @@ fn map_key(key: KeyEvent) -> Option<AppEvent> {
         }
         (KeyCode::Esc, _) => Some(AppEvent::Escape),
         (KeyCode::F(1), _) => Some(AppEvent::Help),
+        (KeyCode::Char('s'), modifiers) if modifiers.contains(KeyModifiers::CONTROL) => {
+            Some(AppEvent::Submit)
+        }
         (KeyCode::Tab, modifiers) if modifiers.contains(KeyModifiers::SHIFT) => {
             Some(AppEvent::BackTab)
         }

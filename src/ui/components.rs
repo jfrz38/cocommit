@@ -156,7 +156,7 @@ pub(super) fn render_footer(frame: &mut Frame, area: Rect) {
 }
 
 pub(super) fn footer_hint() -> &'static str {
-    "F1 Help  |  Up/Down Navigate  |  Space Toggle  |  Ctrl+Enter Commit  |  Esc Cancel"
+    "F1 Help  |  Up/Down Navigate  |  Space Toggle  |  Ctrl+S Commit  |  Esc Cancel"
 }
 
 pub(super) fn subject_indicator(message: &Input, policy: &SubjectPolicy) -> String {
