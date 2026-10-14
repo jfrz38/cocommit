@@ -56,11 +56,13 @@ later. The preview is the exact message passed to Git.
 | --- | --- |
 | `Tab` / `Shift+Tab` | Move between fields |
 | `Enter` | Advance, open a picker, edit a footer, or submit |
-| `Ctrl+Enter` | Submit from any field |
+| `Ctrl+S` / `Ctrl+Enter` | Submit from any field |
 | `Space` | Toggle Breaking, Sign, or a selected staged file |
 | `Up` / `Down` | Navigate fields, lists, and the preview |
 | `F1` | Show keyboard help |
 | `Esc` / `Ctrl+C` | Cancel and restore the terminal |
+
+Use `Ctrl+S` in terminals that cannot distinguish `Ctrl+Enter` from `Enter`.
 
 ## Make it yours
 

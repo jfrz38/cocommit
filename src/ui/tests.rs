@@ -69,10 +69,10 @@ fn configured_accent_colors_the_focused_control() {
 }
 
 #[test]
-fn footer_hint_always_describes_space_as_toggle() {
+fn footer_hint_describes_primary_shortcuts() {
     assert_eq!(
         components::footer_hint(),
-        "F1 Help  |  Up/Down Navigate  |  Space Toggle  |  Ctrl+Enter Commit  |  Esc Cancel"
+        "F1 Help  |  Up/Down Navigate  |  Space Toggle  |  Ctrl+S Commit  |  Esc Cancel"
     );
 }
 

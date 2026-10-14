@@ -92,7 +92,7 @@ fn text(app: &App) -> String {
         ]);
     }
     lines.extend([
-        "Ctrl+Enter       Commit form or save footer".to_owned(),
+        "Ctrl+S/Ctrl+Enter Commit form or save footer".to_owned(),
         "Esc              Close popup or cancel".to_owned(),
         "Ctrl+C           Cancel application".to_owned(),
         "F1               Open or close help".to_owned(),
