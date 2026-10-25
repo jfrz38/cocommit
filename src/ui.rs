@@ -2,8 +2,9 @@
 
 use ratatui::{
     Frame,
-    layout::{Alignment, Rect},
-    widgets::{Paragraph, Wrap},
+    layout::{Alignment, Position, Rect},
+    text::Line,
+    widgets::{Block, Borders, Paragraph, Wrap},
 };
 
 use crate::app::App;
@@ -48,6 +49,44 @@ fn render_resize_instruction(frame: &mut Frame, area: Rect) {
             .wrap(Wrap { trim: true }),
         area,
     );
+}
+
+pub(super) fn render_app_frame(frame: &mut Frame, area: Rect) -> Rect {
+    let outer = Block::default()
+        .borders(Borders::ALL)
+        .title(" cocommit ")
+        .title_bottom(Line::from(format!(" v{} ", env!("CARGO_PKG_VERSION"))).right_aligned());
+    let inner = outer.inner(area);
+    frame.render_widget(outer, area);
+    inner
+}
+
+pub(super) fn render_app_preview(frame: &mut Frame, area: Rect, app: &App) -> u16 {
+    preview::render_preview(
+        frame,
+        area,
+        &app.preview(),
+        app.focus() == crate::app::Focus::Preview,
+        app.preview_state().scroll,
+        app.accent_color(),
+    )
+}
+
+pub(super) fn finish_render(
+    frame: &mut Frame,
+    area: Rect,
+    app: &App,
+    cursor: Option<Position>,
+    form_preview_limit: u16,
+) -> PreviewScrollLimits {
+    let (cursor, expanded_preview_limit) = modal::render(frame, area, app, cursor);
+    if let Some(position) = cursor {
+        frame.set_cursor_position(position);
+    }
+    PreviewScrollLimits {
+        form: form_preview_limit,
+        expanded: expanded_preview_limit,
+    }
 }
 
 #[cfg(test)]

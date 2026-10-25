@@ -1,8 +1,6 @@
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    text::Line,
-    widgets::{Block, Borders},
 };
 
 use crate::app::{App, Focus, Mode};
@@ -13,8 +11,7 @@ use super::{
         render_footer, render_status, render_submit_row, render_text_row, render_toggle_row,
         scope_label, status_for, subject_indicator,
     },
-    modal,
-    preview::render_preview,
+    finish_render, render_app_frame, render_app_preview,
     staged::{render_footers, render_staged_changes},
 };
 
@@ -37,12 +34,7 @@ pub(super) fn minimum_height(app: &App) -> u16 {
 }
 
 pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLimits {
-    let outer = Block::default()
-        .borders(Borders::ALL)
-        .title(" cocommit ")
-        .title_bottom(Line::from(format!(" v{} ", env!("CARGO_PKG_VERSION"))).right_aligned());
-    let inner = outer.inner(area);
-    frame.render_widget(outer, area);
+    let inner = render_app_frame(frame, area);
 
     let sections = app.sections();
     let omitted_form_height = u16::from(!sections.commit_type) * 3
@@ -188,14 +180,7 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollL
         render_staged_changes(frame, rows[row], app);
         row += 1;
     }
-    let form_preview_limit = render_preview(
-        frame,
-        rows[row],
-        &app.preview(),
-        app.focus() == Focus::Preview,
-        app.preview_state().scroll,
-        app.accent_color(),
-    );
+    let form_preview_limit = render_app_preview(frame, rows[row], app);
     row += 1;
     render_submit_row(
         frame,
@@ -210,12 +195,5 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollL
     row += 1;
     render_footer(frame, rows[row]);
 
-    let (cursor, expanded_preview_limit) = modal::render(frame, area, app, cursor);
-    if let Some(position) = cursor {
-        frame.set_cursor_position(position);
-    }
-    PreviewScrollLimits {
-        form: form_preview_limit,
-        expanded: expanded_preview_limit,
-    }
+    finish_render(frame, area, app, cursor, form_preview_limit)
 }
