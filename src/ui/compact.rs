@@ -1,6 +1,7 @@
 use ratatui::{
     Frame,
     layout::{Alignment, Position, Rect},
+    text::Line,
     widgets::{Block, Borders, Paragraph, Wrap},
 };
 use tui_input::Input;
@@ -15,7 +16,10 @@ use super::{
 };
 
 pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLimits {
-    let outer = Block::default().borders(Borders::ALL).title(" cocommit ");
+    let outer = Block::default()
+        .borders(Borders::ALL)
+        .title(" cocommit ")
+        .title_bottom(Line::from(format!(" v{} ", env!("CARGO_PKG_VERSION"))).right_aligned());
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
 

@@ -1,6 +1,7 @@
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
+    text::Line,
     widgets::{Block, Borders},
 };
 
@@ -36,7 +37,10 @@ pub(super) fn minimum_height(app: &App) -> u16 {
 }
 
 pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLimits {
-    let outer = Block::default().borders(Borders::ALL).title(" cocommit ");
+    let outer = Block::default()
+        .borders(Borders::ALL)
+        .title(" cocommit ")
+        .title_bottom(Line::from(format!(" v{} ", env!("CARGO_PKG_VERSION"))).right_aligned());
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
 
