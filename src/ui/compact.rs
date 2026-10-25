@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::{Alignment, Position, Rect},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::Paragraph,
 };
 use tui_input::Input;
 
@@ -9,15 +9,14 @@ use crate::app::{App, Focus, Mode};
 
 use super::{
     PreviewScrollLimits,
-    components::{focused_style, footer_hint, scope_label, status_for, status_style},
-    modal,
-    preview::{clamp_scroll, render_preview},
+    components::{focused_style, render_footer, scope_label, status_for, status_style},
+    finish_render,
+    preview::clamp_scroll,
+    render_app_frame, render_app_preview,
 };
 
 pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLimits {
-    let outer = Block::default().borders(Borders::ALL).title(" cocommit ");
-    let inner = outer.inner(area);
-    frame.render_widget(outer, area);
+    let inner = render_app_frame(frame, area);
 
     let status = status_for(app);
     let status_height = u16::from(status.is_some());
@@ -62,14 +61,7 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollL
         cursor = cursor.or(render_row(frame, row, app, *focus));
     }
 
-    let form_preview_limit = render_preview(
-        frame,
-        rows[1],
-        &app.preview(),
-        app.focus() == Focus::Preview,
-        app.preview_state().scroll,
-        app.accent_color(),
-    );
+    let form_preview_limit = render_app_preview(frame, rows[1], app);
     if let Some((message, is_error)) = status {
         let status = if is_error {
             format!("Error: {message}")
@@ -81,21 +73,9 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollL
             rows[2],
         );
     }
-    frame.render_widget(
-        Paragraph::new(footer_hint())
-            .alignment(Alignment::Center)
-            .wrap(Wrap { trim: true }),
-        rows[3],
-    );
+    render_footer(frame, rows[3]);
 
-    let (cursor, expanded_preview_limit) = modal::render(frame, area, app, cursor);
-    if let Some(position) = cursor {
-        frame.set_cursor_position(position);
-    }
-    PreviewScrollLimits {
-        form: form_preview_limit,
-        expanded: expanded_preview_limit,
-    }
+    finish_render(frame, area, app, cursor, form_preview_limit)
 }
 
 fn render_row(frame: &mut Frame, area: Rect, app: &App, focus: Focus) -> Option<Position> {

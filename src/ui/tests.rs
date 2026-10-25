@@ -77,6 +77,24 @@ fn footer_hint_describes_primary_shortcuts() {
 }
 
 #[test]
+fn renders_current_version_at_the_bottom_right_in_each_layout() {
+    let app = App::new(false);
+    let version = env!("CARGO_PKG_VERSION");
+
+    for (width, height) in [(100, 40), (40, 12)] {
+        let output = rendered(&app, width, height);
+        let bottom_border = output
+            .chars()
+            .skip(usize::from(width) * usize::from(height.saturating_sub(1)))
+            .collect::<String>();
+        assert!(
+            bottom_border.ends_with(&format!(" v{version} ┘")),
+            "version should be right-aligned at {width}x{height}"
+        );
+    }
+}
+
+#[test]
 fn hidden_sections_consume_no_space_or_expose_actions() {
     let mut app = App::new(false).with_sections(UiSections {
         staged_changes: false,
