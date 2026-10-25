@@ -47,7 +47,7 @@ jobs:
           version-replacement: 'version = "{version}"'
           base-branch: ${{ inputs.base_branch }}
           github-token: ${{ github.token }}
-          commit-message: 'chore: bump version to {new-version}'
-          pr-title: 'chore: bump version to {new-version}'
+          commit-message: 'chore: bump version to {next-version}'
+          pr-title: 'chore: bump version to {next-version}'
           pr-body: 'Bumps cocommit from {current-version} to {next-version} using a {bump} release bump.'
           pre-commit-commands: cargo generate-lockfile
