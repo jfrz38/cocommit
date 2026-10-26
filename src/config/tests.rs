@@ -11,6 +11,7 @@ fn defaults_preserve_the_existing_signing_and_message_behavior() {
     let config = Config::default();
 
     assert!(config.ui.sign);
+    assert!(config.ui.update_check);
     assert_eq!(config.ui.sections, UiSections::default());
     assert_eq!(config.message.types[0], "feat");
     assert!(!config.message.types_are_restricted);
@@ -103,6 +104,18 @@ fn merges_global_section_preferences_by_field() {
             ..UiSections::default()
         }
     );
+}
+
+#[test]
+fn accepts_the_update_check_preference_globally() {
+    let directory = tempfile::tempdir().expect("temporary directory should be created");
+    let global = directory.path().join("global.toml");
+    fs::write(&global, "schema_version = 1\n[ui]\nupdate_check = false")
+        .expect("global configuration should be written");
+
+    let config = load_from_paths(Some(&global), directory.path()).unwrap();
+
+    assert!(!config.ui.update_check);
 }
 
 #[test]

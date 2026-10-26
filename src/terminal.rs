@@ -6,13 +6,15 @@ use std::{
     sync::{
         Once,
         atomic::{AtomicBool, Ordering},
+        mpsc::{Receiver, TryRecvError},
     },
+    time::Duration,
 };
 
 use anyhow::{Context, Result, bail};
 use crossterm::{
     cursor::{Hide, Show},
-    event::{DisableBracketedPaste, EnableBracketedPaste, read},
+    event::{DisableBracketedPaste, EnableBracketedPaste, poll, read},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -29,6 +31,7 @@ use std::sync::OnceLock;
 use crate::{
     app::{App, AppAction, SubmissionIntent},
     event, ui,
+    update_check::UpdateNotice,
 };
 
 /// The result returned by the interactive form after terminal restoration.
@@ -39,6 +42,9 @@ pub enum TerminalResult {
 
 static TERMINAL_STATE_ACTIVE: AtomicBool = AtomicBool::new(false);
 static PANIC_HOOK: Once = Once::new();
+
+/// How often the loop wakes while a background update check is in flight.
+const UPDATE_POLL_TICK: Duration = Duration::from_millis(100);
 
 #[cfg(unix)]
 static SIGNAL_HANDLERS: OnceLock<Result<(), String>> = OnceLock::new();
@@ -98,9 +104,22 @@ impl TerminalSession {
     }
 
     /// Runs the synchronous input loop until the user cancels or submits a valid draft.
-    pub fn run(&mut self, app: &mut App) -> Result<TerminalResult> {
+    ///
+    /// Finished background update checks are applied before each frame, and the
+    /// loop polls for input while such a check is still in flight.
+    pub fn run(
+        &mut self,
+        app: &mut App,
+        mut updates: Option<Receiver<UpdateNotice>>,
+    ) -> Result<TerminalResult> {
         loop {
+            settle_updates(app, &mut updates);
             self.draw(app)?;
+            if updates.is_some()
+                && !poll(UPDATE_POLL_TICK).context("failed to poll terminal events")?
+            {
+                continue;
+            }
             let event = read().context("failed to read terminal event")?;
             let Some(event) = event::map(event) else {
                 continue;
@@ -191,10 +210,26 @@ impl Drop for TerminalSession {
     }
 }
 
+/// Applies a finished background update check to the application state.
+fn settle_updates(app: &mut App, updates: &mut Option<Receiver<UpdateNotice>>) {
+    let Some(receiver) = updates.as_ref() else {
+        return;
+    };
+    let outcome = receiver.try_recv();
+    match outcome {
+        Ok(notice) => {
+            *updates = None;
+            app.set_update_version(notice.latest);
+        }
+        Err(TryRecvError::Empty) => {}
+        Err(TryRecvError::Disconnected) => *updates = None,
+    }
+}
+
 /// Runs the UI and guarantees a restoration attempt before returning its result.
-pub fn run(app: &mut App) -> Result<TerminalResult> {
+pub fn run(app: &mut App, updates: Option<Receiver<UpdateNotice>>) -> Result<TerminalResult> {
     let mut session = TerminalSession::new()?;
-    let result = session.run(app);
+    let result = session.run(app, updates);
     let restore_result = session.restore();
 
     match (result, restore_result) {

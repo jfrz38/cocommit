@@ -16,7 +16,7 @@ use super::{
 };
 
 pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLimits {
-    let inner = render_app_frame(frame, area);
+    let inner = render_app_frame(frame, area, app);
 
     let status = status_for(app);
     let status_height = u16::from(status.is_some());

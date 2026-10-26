@@ -34,7 +34,7 @@ pub(super) fn minimum_height(app: &App) -> u16 {
 }
 
 pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) -> PreviewScrollLimits {
-    let inner = render_app_frame(frame, area);
+    let inner = render_app_frame(frame, area, app);
 
     let sections = app.sections();
     let omitted_form_height = u16::from(!sections.commit_type) * 3

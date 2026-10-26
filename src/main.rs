@@ -1,7 +1,9 @@
 use std::{env, process::ExitCode};
 
 use anyhow::{Context, Result};
-use cocommit::{app, cli, commit_workflow::CommitWorkflow, config, defaults, git, terminal};
+use cocommit::{
+    app, cli, commit_workflow::CommitWorkflow, config, defaults, git, terminal, update_check,
+};
 
 const EXIT_FAILURE: u8 = 1;
 const EXIT_USAGE: u8 = 2;
@@ -48,7 +50,12 @@ fn run() -> Result<()> {
         .with_message_policy(&config.message)
         .with_defaults(&composer_defaults);
     app.set_staged_changes(staged_changes);
-    match terminal::run(&mut app)? {
+    let updates = if update_check::enabled(config.ui.update_check) {
+        update_check::start(env!("CARGO_PKG_VERSION"))
+    } else {
+        None
+    };
+    match terminal::run(&mut app, updates)? {
         terminal::TerminalResult::Cancelled => {}
         terminal::TerminalResult::Submitted(app::SubmissionIntent {
             draft,

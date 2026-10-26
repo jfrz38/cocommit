@@ -120,6 +120,7 @@ pub struct App {
     sign: bool,
     sections: UiSections,
     accent_color: AccentColor,
+    update_version: Option<String>,
     staged_selection: StagedSelection,
     footer_selected: usize,
     preview_state: PreviewState,
@@ -161,6 +162,7 @@ impl App {
             sign,
             sections: UiSections::default(),
             accent_color: AccentColor::default(),
+            update_version: None,
             staged_selection: StagedSelection::default(),
             footer_selected: 0,
             preview_state: PreviewState::default(),
@@ -214,6 +216,15 @@ impl App {
         self
     }
 
+    pub fn with_update_version(mut self, version: impl Into<String>) -> Self {
+        self.set_update_version(version);
+        self
+    }
+
+    pub fn set_update_version(&mut self, version: impl Into<String>) {
+        self.update_version = Some(version.into());
+    }
+
     pub fn with_defaults(mut self, defaults: &ComposerDefaults) -> Self {
         if self.sections.commit_type
             && let Some(commit_type) = &defaults.commit_type
@@ -260,6 +271,10 @@ impl App {
 
     pub fn accent_color(&self) -> AccentColor {
         self.accent_color
+    }
+
+    pub fn update_version(&self) -> Option<&str> {
+        self.update_version.as_deref()
     }
 
     pub fn footer_selected(&self) -> usize {

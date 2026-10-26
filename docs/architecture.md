@@ -4,14 +4,15 @@
 multi-crate framework.
 
 ```text
-main -> cli, config, defaults, git, app, terminal, commit_workflow
+main -> cli, config, defaults, git, app, terminal, update_check, commit_workflow
 config -> commit::policy
 config -> settings
 defaults -> config, app, commit, settings
 event -> app
-terminal -> app, event, ui
+terminal -> app, event, ui, update_check
 ui -> app, commit
 app -> commit, settings, staging
+update_check -> filesystem, git CLI
 git -> staging
 commit_workflow -> git, staging
 ```
@@ -27,6 +28,7 @@ commit_workflow -> git, staging
 - `config`: TOML loading and merge logic that produces UI preferences and commit policy.
 - `defaults`: bounded execution of trusted global commands that prefill visible fields.
 - `git`: explicit Git CLI commands, preflight checks, and index updates.
+- `update_check`: best-effort, cached lookup of newer GitHub version tags.
 - `commit_workflow`: temporarily excludes selected staged files, commits the rest, and restores exclusions after a failed commit.
 - `ui` and `terminal`: Ratatui rendering and Crossterm lifecycle respectively.
 
