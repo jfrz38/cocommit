@@ -75,6 +75,13 @@ personal defaults for signing, visible composer sections, and optionally
   Commit this file to the repository so the whole team shares the same commit
   conventions.
 
+While the composer opens, `cocommit` compares its installed version with the
+newest release published on GitHub in the background, at most once every few
+hours. When a newer one exists — usually within two seconds — the version at
+the bottom right of the frame highlights it in yellow, without delaying the
+interface. The check is silent when offline and can be disabled with
+`update_check = false` or `COCOMMIT_UPDATE_CHECK=0`.
+
 Signing and all configurable sections are enabled by default. Global preferences
 can hide any composer field except the subject; hiding Type creates a subject-only
 message. Repository policy can

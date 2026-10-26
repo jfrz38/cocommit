@@ -12,3 +12,4 @@ pub mod settings;
 pub mod staging;
 pub mod terminal;
 mod ui;
+pub mod update_check;

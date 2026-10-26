@@ -3,7 +3,8 @@
 use ratatui::{
     Frame,
     layout::{Alignment, Position, Rect},
-    text::Line,
+    style::{Color, Style},
+    text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Wrap},
 };
 
@@ -51,14 +52,33 @@ fn render_resize_instruction(frame: &mut Frame, area: Rect) {
     );
 }
 
-pub(super) fn render_app_frame(frame: &mut Frame, area: Rect) -> Rect {
+pub(super) fn render_app_frame(frame: &mut Frame, area: Rect, app: &App) -> Rect {
     let outer = Block::default()
         .borders(Borders::ALL)
         .title(" cocommit ")
-        .title_bottom(Line::from(format!(" v{} ", env!("CARGO_PKG_VERSION"))).right_aligned());
+        .title_bottom(version_title(area.width, app).right_aligned());
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
     inner
+}
+
+/// Describes the installed version, highlighting a newer GitHub tag.
+fn version_title(width: u16, app: &App) -> Line<'static> {
+    let current = env!("CARGO_PKG_VERSION");
+    let Some(latest) = app.update_version() else {
+        return Line::from(format!(" v{current} "));
+    };
+    let warning = Style::new().fg(Color::Yellow);
+    let announcement = format!(" v{current} → {latest} ");
+    let border_corners = 2;
+    if usize::from(width) >= announcement.chars().count() + border_corners {
+        return Line::from(Span::styled(announcement, warning));
+    }
+    Line::from(vec![
+        Span::raw(format!(" v{current}")),
+        Span::styled("!", warning),
+        Span::raw(" "),
+    ])
 }
 
 pub(super) fn render_app_preview(frame: &mut Frame, area: Rect, app: &App) -> u16 {

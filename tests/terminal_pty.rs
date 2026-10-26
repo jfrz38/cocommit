@@ -68,6 +68,7 @@ fn spawn_in_pty(directory: &TempDir) -> PtySession {
         .expect("PTY should open");
     let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_cocommit"));
     command.cwd(directory.path());
+    command.env("COCOMMIT_UPDATE_CHECK", "0");
     let child = pair
         .slave
         .spawn_command(command)

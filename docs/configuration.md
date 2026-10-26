@@ -25,6 +25,7 @@ schema_version = 1
 [ui]
 sign = false
 accent_color = "cyan"
+update_check = true
 
 [ui.sections]
 type = true
@@ -50,6 +51,21 @@ layout fit in shorter terminals.
 `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `gray`,
 `dark_gray`, `light_red`, `light_green`, `light_yellow`, `light_blue`,
 `light_magenta`, `light_cyan`, or `white`, and defaults to `cyan`.
+
+`update_check` (default `true`) compares the installed version with the newest
+stable `vX.Y.Z` Git tag on GitHub while the terminal interface is already open.
+This checks tags, not crates.io publication status, so a new tag may be
+announced before its package is available through `cargo install`.
+The check runs in a background thread: when it finds a newer release — at most
+two seconds after startup — the version at the bottom right of the frame shows
+it in yellow (` v0.2.3 → 0.3.0 `), falling back to a yellow `!` in narrow
+terminals, without ever delaying the interface. The result is cached in the
+platform cache directory (`cocommit/update-check.toml`) for 24 hours, and a
+failed check for 6 hours, so the network is used at most once per window.
+Every failure — offline, timeout, missing Git — is silent and simply keeps the
+notice from appearing. Set `update_check = false`, or export
+`COCOMMIT_UPDATE_CHECK=0`, to skip the check entirely; no process is started
+and no network request is made when it is disabled.
 
 ## Executable defaults
 

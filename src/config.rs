@@ -30,6 +30,7 @@ pub struct UiPreferences {
     pub sign: bool,
     pub sections: UiSections,
     pub accent_color: AccentColor,
+    pub update_check: bool,
 }
 
 impl Default for UiPreferences {
@@ -38,6 +39,7 @@ impl Default for UiPreferences {
             sign: true,
             sections: UiSections::default(),
             accent_color: AccentColor::default(),
+            update_check: true,
         }
     }
 }
@@ -82,6 +84,7 @@ struct UiPreferencesPatch {
     sign: Option<bool>,
     sections: Option<UiSectionsPatch>,
     accent_color: Option<AccentColor>,
+    update_check: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -357,6 +360,9 @@ fn merge_ui(ui: &mut UiPreferences, patch: UiPreferencesPatch) {
     }
     if let Some(accent_color) = patch.accent_color {
         ui.accent_color = accent_color;
+    }
+    if let Some(update_check) = patch.update_check {
+        ui.update_check = update_check;
     }
     if let Some(sections) = patch.sections {
         if let Some(commit_type) = sections.commit_type {

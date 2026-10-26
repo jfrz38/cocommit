@@ -4,7 +4,7 @@ use crate::{
     commit::{Capitalization, MessagePolicy, SubjectPolicy, TerminalPunctuation},
     settings::{AccentColor, UiSections},
 };
-use ratatui::{Terminal, backend::TestBackend, style::Color};
+use ratatui::{Terminal, backend::TestBackend, buffer::Buffer, style::Color};
 use tui_input::Input;
 
 fn focus(app: &mut App, target: Focus) {
@@ -31,7 +31,7 @@ fn draw(app: &App, width: u16, height: u16) {
     let _ = rendered(app, width, height);
 }
 
-fn rendered(app: &App, width: u16, height: u16) -> String {
+fn rendered_buffer(app: &App, width: u16, height: u16) -> Buffer {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).expect("test terminal should initialize");
     terminal
@@ -39,12 +39,21 @@ fn rendered(app: &App, width: u16, height: u16) -> String {
             let _ = render(frame, app);
         })
         .expect("rendering should not fail");
-    terminal
-        .backend()
-        .buffer()
+    terminal.backend().buffer().clone()
+}
+
+fn rendered(app: &App, width: u16, height: u16) -> String {
+    rendered_buffer(app, width, height)
         .content()
         .iter()
         .map(|cell| cell.symbol())
+        .collect()
+}
+
+fn bottom_border(output: &str, width: u16, height: u16) -> String {
+    output
+        .chars()
+        .skip(usize::from(width) * usize::from(height.saturating_sub(1)))
         .collect()
 }
 
@@ -83,15 +92,64 @@ fn renders_current_version_at_the_bottom_right_in_each_layout() {
 
     for (width, height) in [(100, 40), (40, 12)] {
         let output = rendered(&app, width, height);
-        let bottom_border = output
-            .chars()
-            .skip(usize::from(width) * usize::from(height.saturating_sub(1)))
-            .collect::<String>();
         assert!(
-            bottom_border.ends_with(&format!(" v{version} ┘")),
+            bottom_border(&output, width, height).ends_with(&format!(" v{version} ┘")),
             "version should be right-aligned at {width}x{height}"
         );
     }
+}
+
+#[test]
+fn renders_the_newer_release_version_at_the_bottom_right_when_it_fits() {
+    let app = App::new(false).with_update_version("0.3.0");
+    let version = env!("CARGO_PKG_VERSION");
+
+    for (width, height) in [(100, 40), (40, 12)] {
+        let output = rendered(&app, width, height);
+        assert!(
+            bottom_border(&output, width, height).ends_with(&format!(" v{version} → 0.3.0 ┘")),
+            "the newer release should be right-aligned at {width}x{height}"
+        );
+    }
+}
+
+#[test]
+fn falls_back_to_a_warning_mark_when_the_release_version_does_not_fit() {
+    let app = App::new(false).with_update_version("0.12345678901234567890.1");
+    let version = env!("CARGO_PKG_VERSION");
+    let (width, height) = (30, 12);
+
+    let output = rendered(&app, width, height);
+    let border = bottom_border(&output, width, height);
+
+    assert!(
+        border.ends_with(&format!(" v{version}! ┘")),
+        "a narrow frame should keep the installed version and mark the update, got {border:?}"
+    );
+    let buffer = rendered_buffer(&app, width, height);
+    let mark = (0..width)
+        .position(|x| buffer[(x, height - 1)].symbol() == "!")
+        .expect("the fallback mark should be rendered");
+    assert_eq!(
+        buffer[(u16::try_from(mark).expect("column fits"), height - 1)].fg,
+        Color::Yellow
+    );
+}
+
+#[test]
+fn colors_the_newer_release_version_yellow() {
+    let app = App::new(false).with_update_version("0.3.0");
+    let (width, height) = (100, 40);
+    let buffer = rendered_buffer(&app, width, height);
+
+    let yellow = (0..width)
+        .filter(|&x| buffer[(x, height - 1)].fg == Color::Yellow)
+        .count();
+
+    assert!(
+        yellow >= " → 0.3.0 ".len(),
+        "the newer release announcement should be yellow, found {yellow} cells"
+    );
 }
 
 #[test]
