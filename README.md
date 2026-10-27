@@ -20,6 +20,7 @@ https://github.com/user-attachments/assets/9e13ccbe-829c-40aa-ae48-235c0f308662
 
 - Build complete Conventional Commit messages without memorizing their syntax.
 - See the final message while you write it, before it reaches Git.
+- Keep the current branch visible while composing the commit.
 - Catch an accidentally staged file and leave it out of the commit.
 - Keep your hooks, signing, credentials, and usual Git output.
 - Stay in the terminal from start to finish.

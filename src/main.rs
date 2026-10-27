@@ -37,6 +37,7 @@ fn run() -> Result<()> {
     let working_directory = env::current_dir().context("failed to determine current directory")?;
     let staged_changes = git::preflight(&working_directory)?;
     let work_tree_root = git::work_tree_root(&working_directory)?;
+    let head_label = git::head_label(&work_tree_root)?;
     let config = config::load(&work_tree_root)?;
     let composer_defaults = defaults::resolve(
         &config.defaults,
@@ -47,6 +48,7 @@ fn run() -> Result<()> {
     let mut app = app::App::new(config.ui.sign)
         .with_sections(config.ui.sections)
         .with_accent_color(config.ui.accent_color)
+        .with_head_label(head_label)
         .with_message_policy(&config.message)
         .with_defaults(&composer_defaults);
     app.set_staged_changes(staged_changes);
