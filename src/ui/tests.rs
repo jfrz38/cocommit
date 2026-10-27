@@ -100,6 +100,33 @@ fn renders_current_version_at_the_bottom_right_in_each_layout() {
 }
 
 #[test]
+fn renders_the_current_branch_at_the_top_right_in_each_layout() {
+    let app = App::new(false).with_head_label("branch: feature/current-branch");
+
+    for (width, height) in [(100, 40), (50, 12)] {
+        let output = rendered(&app, width, height);
+        let top_border = output.chars().take(usize::from(width)).collect::<String>();
+        assert!(
+            top_border.ends_with(" branch: feature/current-branch ┐"),
+            "branch should be right-aligned at {width}x{height}, got {top_border:?}"
+        );
+    }
+}
+
+#[test]
+fn truncates_a_long_branch_before_it_overlaps_the_application_title() {
+    let app = App::new(false)
+        .with_head_label("branch: feature/a-very-long-description-that-does-not-fit");
+    let width = 30;
+    let output = rendered(&app, width, 12);
+    let top_border = output.chars().take(usize::from(width)).collect::<String>();
+
+    assert!(top_border.starts_with("┌ cocommit "));
+    assert!(top_border.contains("branch:"));
+    assert!(top_border.ends_with("… ┐"));
+}
+
+#[test]
 fn renders_the_newer_release_version_at_the_bottom_right_when_it_fits() {
     let app = App::new(false).with_update_version("0.3.0");
     let version = env!("CARGO_PKG_VERSION");

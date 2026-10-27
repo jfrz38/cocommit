@@ -61,6 +61,22 @@ pub fn work_tree_root(working_directory: &Path) -> Result<PathBuf> {
     Ok(PathBuf::from(path_from_git(root)))
 }
 
+/// Describes the symbolic branch, or the commit when HEAD is detached.
+pub fn head_label(working_directory: &Path) -> Result<String> {
+    let output = Command::new("git")
+        .current_dir(working_directory)
+        .args(["symbolic-ref", "--quiet", "--short", "HEAD"])
+        .output()
+        .map_err(|error| git_start_error("git symbolic-ref --quiet --short HEAD", error))?;
+
+    match output.status.code() {
+        Some(0) => Ok(format!("branch: {}", display_git_line(&output.stdout)?)),
+        Some(1) => detached_head_label(working_directory),
+        Some(code) => bail!("git symbolic-ref --quiet --short HEAD failed with exit code {code}"),
+        None => bail!("git symbolic-ref --quiet --short HEAD was terminated by a signal"),
+    }
+}
+
 /// Reads a display-safe, read-only snapshot of the staged Git index.
 pub fn staged_changes(working_directory: &Path) -> Result<StagedChanges> {
     let name_status = Command::new("git")
@@ -221,6 +237,28 @@ fn has_head(working_directory: &Path) -> Result<bool> {
         Some(code) => bail!("git rev-parse --verify --quiet HEAD failed with exit code {code}"),
         None => bail!("git rev-parse --verify --quiet HEAD was terminated by a signal"),
     }
+}
+
+fn detached_head_label(working_directory: &Path) -> Result<String> {
+    let output = Command::new("git")
+        .current_dir(working_directory)
+        .args(["rev-parse", "--short", "HEAD"])
+        .output()
+        .map_err(|error| git_start_error("git rev-parse --short HEAD", error))?;
+    if !output.status.success() {
+        return Err(git_failure("git rev-parse --short HEAD", &output));
+    }
+    Ok(format!("HEAD @ {}", display_git_line(&output.stdout)?))
+}
+
+fn display_git_line(output: &[u8]) -> Result<String> {
+    let value = String::from_utf8_lossy(output)
+        .trim_end_matches(['\r', '\n'])
+        .to_owned();
+    if value.is_empty() {
+        bail!("Git returned an empty HEAD description");
+    }
+    Ok(value)
 }
 
 fn unstage_arguments(files: &[StagedFile], has_head: bool) -> Vec<OsString> {

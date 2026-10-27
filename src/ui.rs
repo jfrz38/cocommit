@@ -9,6 +9,7 @@ use ratatui::{
 };
 
 use crate::app::App;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 mod compact;
 mod components;
@@ -21,6 +22,8 @@ mod staged;
 const MIN_WIDTH: u16 = 30;
 const MIN_HEIGHT: u16 = 8;
 const EXPANDED_WIDTH: u16 = 50;
+const APP_TITLE: &str = " cocommit ";
+const TITLE_GAP: usize = 1;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PreviewScrollLimits {
@@ -55,11 +58,46 @@ fn render_resize_instruction(frame: &mut Frame, area: Rect) {
 pub(super) fn render_app_frame(frame: &mut Frame, area: Rect, app: &App) -> Rect {
     let outer = Block::default()
         .borders(Borders::ALL)
-        .title(" cocommit ")
+        .title(APP_TITLE)
+        .title(head_title(area.width, app).right_aligned())
         .title_bottom(version_title(area.width, app).right_aligned());
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
     inner
+}
+
+fn head_title(width: u16, app: &App) -> Line<'static> {
+    let available = usize::from(width)
+        .saturating_sub(2)
+        .saturating_sub(APP_TITLE.width())
+        .saturating_sub(TITLE_GAP);
+    let Some(label) = app.head_label() else {
+        return Line::default();
+    };
+    let available_for_label = available.saturating_sub(2);
+    if available_for_label < 4 {
+        return Line::default();
+    }
+    Line::from(format!(" {} ", truncate_label(label, available_for_label)))
+}
+
+fn truncate_label(label: &str, max_width: usize) -> String {
+    if label.width() <= max_width {
+        return label.to_owned();
+    }
+    let content_width = max_width.saturating_sub(1);
+    let mut truncated = String::new();
+    let mut width = 0;
+    for character in label.chars() {
+        let character_width = character.width().unwrap_or(0);
+        if width + character_width > content_width {
+            break;
+        }
+        truncated.push(character);
+        width += character_width;
+    }
+    truncated.push('…');
+    truncated
 }
 
 /// Describes the installed version, highlighting a newer GitHub tag.

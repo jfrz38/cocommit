@@ -108,6 +108,39 @@ fn preflight_accepts_a_staged_repository_and_rejects_missing_staged_changes() {
 }
 
 #[test]
+fn head_label_describes_symbolic_and_detached_heads() {
+    if !require_git() {
+        return;
+    }
+    let repository = tempdir().expect("temporary repository should be created");
+    run_git(repository.path(), ["init"]);
+    run_git(
+        repository.path(),
+        ["branch", "-m", "feature/current-branch"],
+    );
+
+    assert_eq!(
+        cocommit::git::head_label(repository.path()).expect("symbolic HEAD should be described"),
+        "branch: feature/current-branch"
+    );
+
+    configure_identity(repository.path());
+    fs::write(repository.path().join("tracked.txt"), "content\n")
+        .expect("tracked file should be written");
+    run_git(repository.path(), ["add", "tracked.txt"]);
+    run_git(repository.path(), ["commit", "-m", "test: create HEAD"]);
+    let commit = git_output(repository.path(), ["rev-parse", "--short", "HEAD"])
+        .trim()
+        .to_owned();
+    run_git(repository.path(), ["checkout", "--detach"]);
+
+    assert_eq!(
+        cocommit::git::head_label(repository.path()).expect("detached HEAD should be described"),
+        format!("HEAD @ {commit}")
+    );
+}
+
+#[test]
 fn preflight_rejects_a_bare_repository() {
     if !require_git() {
         return;
