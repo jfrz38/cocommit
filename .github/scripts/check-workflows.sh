@@ -22,6 +22,9 @@ grep -q "steps.version-change.outputs.changed == 'true'" .github/workflows/relea
 grep -q 'compare-source: registry' .github/workflows/publish.yml
 grep -q 'fail-on-unchanged: true' .github/workflows/publish.yml
 grep -q 'fail-on-not-higher: true' .github/workflows/publish.yml
+grep -q '^[[:space:]]*changelog: git-cliff$' .github/workflows/bump-version.yml
+test -f CHANGELOG.md
+test -f cliff.toml
 grep -q 'releases/latest' .github/workflows/publish.yml
 grep -q 'test "\$GITHUB_REF" = "refs/heads/main"' .github/workflows/publish.yml
 if grep -q '^    inputs:$' .github/workflows/publish.yml; then
